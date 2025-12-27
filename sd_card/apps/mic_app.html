@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO - Microphone Monitor</title>
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+        }
+
+        .mic-level {
+            height: 200px;
+            background: linear-gradient(to top, #28a745, #ffc107, #dc3545);
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            border: 3px solid #333;
+        }
+
+        .mic-level-bar {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            transition: height 0.1s ease;
+        }
+
+        .mic-value {
+            font-size: 3rem;
+            font-weight: bold;
+            text-align: center;
+            color: #667eea;
+        }
+
+        .status-badge {
+            font-size: 1rem;
+            padding: 10px 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="text-center mb-4">
+            <h1 class="text-primary"><i class="bi bi-mic-fill"></i> Microphone Monitor</h1>
+            <p class="text-muted">PDM Microphone Audio Level</p>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">Audio Level</h5>
+                <div class="mic-value" id="micValue">0</div>
+                <small class="text-muted">dB</small>
+            </div>
+        </div>
+
+        <div class="mic-level mb-4">
+            <div class="mic-level-bar" id="micLevelBar"></div>
+        </div>
+
+        <div class="d-grid gap-2 mb-3">
+            <button class="btn btn-primary btn-lg" id="startBtn" onclick="startMonitoring()">
+                <i class="bi bi-play-fill"></i> Start Monitoring
+            </button>
+            <button class="btn btn-danger btn-lg d-none" id="stopBtn" onclick="stopMonitoring()">
+                <i class="bi bi-stop-fill"></i> Stop Monitoring
+            </button>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-record-circle"></i> Audio Recording</h5>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="filename" placeholder="recording.wav"
+                        value="recording.wav">
+                    <button class="btn btn-danger" id="recordBtn" onclick="startRecording()">
+                        <i class="bi bi-record-fill"></i> Start Recording
+                    </button>
+                </div>
+                <button class="btn btn-secondary w-100 d-none" id="stopRecordBtn" onclick="stopRecording()">
+                    <i class="bi bi-stop-circle"></i> Stop Recording
+                </button>
+                <div class="mt-2">
+                    <span class="badge bg-secondary" id="recordStatus">Not Recording</span>
+                    <span class="badge bg-info d-none" id="recordDuration">0:00</span>
+                </div>
+                <small class="text-muted d-block mt-2">
+                    <i class="bi bi-folder"></i> Saved to: /recordings/ folder
+                </small>
+            </div>
+        </div>
+
+        <div class="text-center">
+            <span class="badge bg-secondary status-badge" id="status">Stopped</span>
+        </div>
+
+        <div class="alert alert-info mt-3" role="alert">
+            <small>
+                <i class="bi bi-info-circle"></i>
+                <strong>Status:</strong> <span id="micStatus">Checking...</span><br>
+                <strong>Raw Value:</strong> <span id="rawValue">-</span><br>
+                The microphone monitors ambient audio levels. Higher values indicate louder sounds.
+            </small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let monitoring = false;
+        let monitorInterval = null;
+        let errorCount = 0;
+        const MAX_ERRORS = 5;
+
+        function updateMicLevel(level) {
+            // Normalize level to 0-100 for display
+            const normalized = Math.min(Math.max(level, 0), 100);
+
+            document.getElementById('micValue').textContent = normalized;
+            document.getElementById('micLevelBar').style.height = normalized + '%';
+        }
+
+        function startMonitoring() {
+            monitoring = true;
+            errorCount = 0;
+            document.getElementById('startBtn').classList.add('d-none');
+            document.getElementById('stopBtn').classList.remove('d-none');
+            document.getElementById('status').textContent = 'Monitoring...';
+            document.getElementById('status').className = 'badge bg-success status-badge';
+
+            // Test the API first
+            fetch('/_api/mic/level')
+                .then(response => {
+                    console.log('API test response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('API test response data:', data);
+                    document.getElementById('micStatus').textContent = data.initialized ? 'Initialized ✓' : 'Not Initialized ✗';
+                    if (data.level !== undefined) {
+                        updateMicLevel(data.level);
+                        document.getElementById('rawValue').textContent = data.level;
+                    }
+                })
+                .catch(error => {
+                    console.error('API test failed:', error);
+                    alert('Failed to connect to microphone API: ' + error.message + '\n\nMake sure the firmware is uploaded and the device is accessible.');
+                    stopMonitoring();
+                    return;
+                });
+
+            monitorInterval = setInterval(() => {
+                fetch('/_api/mic/level')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        errorCount = 0; // Reset error count on success
+                        document.getElementById('micStatus').textContent = data.initialized ? 'Initialized ✓' : 'Not Initialized ✗';
+                        if (data.level !== undefined) {
+                            updateMicLevel(data.level);
+                            document.getElementById('rawValue').textContent = data.level;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error reading microphone:', error);
+                        errorCount++;
+
+                        // Only stop after multiple consecutive errors
+                        if (errorCount >= MAX_ERRORS) {
+                            alert('Lost connection to microphone API after ' + MAX_ERRORS + ' attempts.');
+                            stopMonitoring();
+                        }
+                    });
+            }, 100); // Update 10 times per second
+        }
+
+        function stopMonitoring() {
+            monitoring = false;
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+
+            document.getElementById('startBtn').classList.remove('d-none');
+            document.getElementById('stopBtn').classList.add('d-none');
+            document.getElementById('status').textContent = 'Stopped';
+            document.getElementById('status').className = 'badge bg-secondary status-badge';
+        }
+
+        // Check if microphone is available on load
+        fetch('/_api/system/info')
+            .then(response => response.json())
+            .then(data => {
+                console.log('System info:', data);
+            })
+            .catch(error => console.error('Error:', error));
+
+        async function startRecording() {
+            const filename = document.getElementById('filename').value || 'recording.wav';
+
+            try {
+                const response = await fetch('/_api/mic/record/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to start recording');
+                }
+
+                document.getElementById('recordBtn').classList.add('d-none');
+                document.getElementById('stopRecordBtn').classList.remove('d-none');
+                document.getElementById('recordStatus').textContent = 'Recording...';
+                document.getElementById('recordStatus').className = 'badge bg-danger';
+                document.getElementById('recordDuration').classList.remove('d-none');
+
+                // Start duration timer
+                startDurationTimer();
+            } catch (error) {
+                alert('Failed to start recording: ' + error.message);
+            }
+        }
+
+        async function stopRecording() {
+            try {
+                await fetch('/_api/mic/record/stop', { method: 'POST' });
+
+                document.getElementById('recordBtn').classList.remove('d-none');
+                document.getElementById('stopRecordBtn').classList.add('d-none');
+                document.getElementById('recordStatus').textContent = 'Stopped';
+                document.getElementById('recordStatus').className = 'badge bg-secondary';
+                document.getElementById('recordDuration').classList.add('d-none');
+
+                stopDurationTimer();
+                alert('Recording saved to /recordings/ folder. View in File Manager!');
+            } catch (error) {
+                alert('Failed to stop recording: ' + error.message);
+            }
+        }
+
+        let durationTimer = null;
+
+        function startDurationTimer() {
+            durationTimer = setInterval(async () => {
+                try {
+                    const response = await fetch('/_api/mic/record/status');
+                    const data = await response.json();
+
+                    if (data.recording && data.duration !== undefined) {
+                        const mins = Math.floor(data.duration / 60);
+                        const secs = data.duration % 60;
+                        document.getElementById('recordDuration').textContent =
+                            `${mins}:${secs.toString().padStart(2, '0')}`;
+                    }
+                } catch (error) {
+                    console.error('Error updating duration:', error);
+                }
+            }, 1000);
+        }
+
+        function stopDurationTimer() {
+            if (durationTimer) {
+                clearInterval(durationTimer);
+                durationTimer = null;
+            }
+        }
+    </script>
+</body>
+
+</html>

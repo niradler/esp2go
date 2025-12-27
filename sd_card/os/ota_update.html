@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO - OTA Firmware Update</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .card { box-shadow: 0 10px 30px rgba(0,0,0,0.3); border: none; }
+        .progress { height: 30px; font-size: 16px; font-weight: bold; }
+        .status { min-height: 60px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0">🔄 OTA Firmware Update</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <strong>⚠️ Warning:</strong> Do not disconnect power or close this page during update!
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="firmwareFile" class="form-label">Select Firmware (.bin file):</label>
+                            <input type="file" class="form-control" id="firmwareFile" accept=".bin">
+                            <small class="text-muted">Location: <code>.pio/build/m5stack-atoms3u/firmware.bin</code></small>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="otaPassword" class="form-label">OTA Password:</label>
+                            <input type="password" class="form-control" id="otaPassword" placeholder="Enter OTA password">
+                            <small class="text-muted">Required if OTA password is configured</small>
+                        </div>
+
+                        <button id="uploadBtn" class="btn btn-success btn-lg w-100 mb-3" disabled>
+                            <span id="uploadBtnText">📤 Upload Firmware</span>
+                        </button>
+
+                        <div id="progressContainer" style="display: none;">
+                            <div class="progress mb-3">
+                                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" style="width: 0%">0%</div>
+                            </div>
+                        </div>
+
+                        <div id="status" class="alert status" style="display: none;"></div>
+
+                        <div class="mt-3">
+                            <a href="/dashboard.html" class="btn btn-outline-secondary">← Back to Dashboard</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('firmwareFile');
+        const passwordInput = document.getElementById('otaPassword');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadBtnText = document.getElementById('uploadBtnText');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const status = document.getElementById('status');
+
+        fileInput.addEventListener('change', (e) => {
+            uploadBtn.disabled = !e.target.files.length;
+        });
+
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                showStatus('Please select a firmware file', 'danger');
+                return;
+            }
+
+            if (!file.name.endsWith('.bin')) {
+                showStatus('Please select a valid .bin file', 'danger');
+                return;
+            }
+
+            if (!confirm('Start firmware update? Device will restart after completion.')) {
+                return;
+            }
+
+            uploadBtn.disabled = true;
+            fileInput.disabled = true;
+            passwordInput.disabled = true;
+            progressContainer.style.display = 'block';
+            status.style.display = 'none';
+            uploadBtnText.textContent = '⏳ Uploading...';
+
+            try {
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        progressBar.style.width = percent + '%';
+                        progressBar.textContent = percent + '%';
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status === 200) {
+                        progressBar.classList.remove('progress-bar-animated');
+                        progressBar.classList.add('bg-success');
+                        showStatus('✅ Update successful! Device is restarting...', 'success');
+                        uploadBtnText.textContent = '✅ Upload Complete';
+                        
+                        setTimeout(() => {
+                            showStatus('Waiting for device to restart (30s)...', 'info');
+                        }, 2000);
+
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 30000);
+                    } else if (xhr.status === 401 || xhr.status === 403) {
+                        throw new Error('Invalid or missing OTA password');
+                    } else {
+                        throw new Error('Upload failed: ' + xhr.statusText);
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    throw new Error('Network error during upload');
+                });
+
+                xhr.addEventListener('abort', () => {
+                    throw new Error('Upload cancelled');
+                });
+
+                xhr.open('POST', '/_api/ota/update');
+                
+                // Add password header if provided
+                const password = passwordInput.value.trim();
+                if (password) {
+                    xhr.setRequestHeader('X-OTA-Password', password);
+                }
+                
+                xhr.send(file);
+
+            } catch (error) {
+                progressBar.classList.add('bg-danger');
+                showStatus('❌ Error: ' + error.message, 'danger');
+                uploadBtn.disabled = false;
+                fileInput.disabled = false;
+                passwordInput.disabled = false;
+                uploadBtnText.textContent = '📤 Upload Firmware';
+            }
+        });
+
+        function showStatus(message, type) {
+            status.className = 'alert status alert-' + type;
+            status.textContent = message;
+            status.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
+

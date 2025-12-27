@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO - LED Controller</title>
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .led-preview {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            margin: 20px auto;
+            box-shadow: 0 0 50px rgba(255, 255, 255, 0.5);
+            transition: all 0.3s;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container py-5">
+        <div class="card shadow-lg">
+            <div class="card-body text-center">
+                <h2 class="mb-4">🌈 RGB LED Control</h2>
+
+                <div class="led-preview" id="ledPreview"></div>
+
+                <div class="row g-3 mt-4">
+                    <div class="col-12">
+                        <label class="form-label">Red</label>
+                        <input type="range" class="form-range" id="redSlider" min="0" max="255" value="0">
+                        <span id="redValue">0</span>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Green</label>
+                        <input type="range" class="form-range" id="greenSlider" min="0" max="255" value="0">
+                        <span id="greenValue">0</span>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Blue</label>
+                        <input type="range" class="form-range" id="blueSlider" min="0" max="255" value="0">
+                        <span id="blueValue">0</span>
+                    </div>
+                </div>
+
+                <div class="row g-2 mt-4">
+                    <div class="col"><button class="btn btn-danger w-100" onclick="setColor(255,0,0)">Red</button></div>
+                    <div class="col"><button class="btn btn-success w-100" onclick="setColor(0,255,0)">Green</button>
+                    </div>
+                    <div class="col"><button class="btn btn-primary w-100" onclick="setColor(0,0,255)">Blue</button>
+                    </div>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col"><button class="btn btn-warning w-100" onclick="setColor(255,255,0)">Yellow</button>
+                    </div>
+                    <div class="col"><button class="btn btn-info w-100" onclick="setColor(0,255,255)">Cyan</button>
+                    </div>
+                    <div class="col"><button class="btn btn-secondary w-100"
+                            onclick="setColor(255,255,255)">White</button></div>
+                </div>
+                <button class="btn btn-dark w-100 mt-3" onclick="setColor(0,0,0)">Turn OFF</button>
+
+                <a href="/" class="btn btn-outline-secondary mt-4">← Back to Files</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const red = document.getElementById('redSlider');
+        const green = document.getElementById('greenSlider');
+        const blue = document.getElementById('blueSlider');
+        const preview = document.getElementById('ledPreview');
+
+        function updatePreview() {
+            const r = red.value;
+            const g = green.value;
+            const b = blue.value;
+            preview.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+            document.getElementById('redValue').textContent = r;
+            document.getElementById('greenValue').textContent = g;
+            document.getElementById('blueValue').textContent = b;
+            sendToLED(r, g, b);
+        }
+
+        async function sendToLED(r, g, b) {
+            try {
+                await fetch('/_api/led/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ r: parseInt(r), g: parseInt(g), b: parseInt(b) })
+                });
+            } catch (err) {
+                console.error('LED update failed', err);
+            }
+        }
+
+        function setColor(r, g, b) {
+            red.value = r;
+            green.value = g;
+            blue.value = b;
+            updatePreview();
+        }
+
+        red.oninput = green.oninput = blue.oninput = updatePreview;
+        updatePreview();
+    </script>
+</body>
+
+</html>

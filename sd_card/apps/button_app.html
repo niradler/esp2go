@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO - Button Monitor</title>
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+        }
+
+        .button-visual {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            transition: all 0.2s ease;
+            background: linear-gradient(145deg, #e6e6e6, #ffffff);
+            box-shadow: 5px 5px 15px #d1d1d1, -5px -5px 15px #ffffff;
+        }
+
+        .button-visual.pressed {
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+            box-shadow: inset 5px 5px 15px #3d8b40, inset -5px -5px 15px #5bb85e;
+            transform: scale(0.95);
+        }
+
+        .event-log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .event-item {
+            padding: 5px;
+            border-bottom: 1px solid #dee2e6;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="text-center mb-4">
+            <h1 class="text-primary"><i class="bi bi-toggle-on"></i> Button Monitor</h1>
+            <p class="text-muted">GPIO 41 Button Status</p>
+        </div>
+
+        <div class="button-visual" id="buttonVisual">
+            <i class="bi bi-circle-fill text-secondary" id="buttonIcon"></i>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h4 id="buttonStatus" class="text-secondary">Not Pressed</h4>
+                <p class="mb-0 text-muted">Press Count: <strong id="pressCount">0</strong></p>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2 mb-3">
+            <button class="btn btn-primary btn-lg" id="startBtn" onclick="startMonitoring()">
+                <i class="bi bi-play-fill"></i> Start Monitoring
+            </button>
+            <button class="btn btn-danger btn-lg d-none" id="stopBtn" onclick="stopMonitoring()">
+                <i class="bi bi-stop-fill"></i> Stop Monitoring
+            </button>
+            <button class="btn btn-secondary" onclick="clearLog()">
+                <i class="bi bi-trash"></i> Clear Log
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <strong>Event Log</strong>
+            </div>
+            <div class="event-log" id="eventLog">
+                <div class="text-muted text-center">No events yet</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let monitoring = false;
+        let monitorInterval = null;
+        let lastState = false;
+        let pressCount = 0;
+        let errorCount = 0;
+        const MAX_ERRORS = 5;
+
+        function addEvent(message) {
+            const log = document.getElementById('eventLog');
+            if (log.querySelector('.text-muted')) {
+                log.innerHTML = '';
+            }
+
+            const timestamp = new Date().toLocaleTimeString();
+            const eventItem = document.createElement('div');
+            eventItem.className = 'event-item';
+            eventItem.textContent = `[${timestamp}] ${message}`;
+            log.insertBefore(eventItem, log.firstChild);
+        }
+
+        function updateButtonState(pressed) {
+            const visual = document.getElementById('buttonVisual');
+            const icon = document.getElementById('buttonIcon');
+            const status = document.getElementById('buttonStatus');
+
+            if (pressed) {
+                visual.classList.add('pressed');
+                icon.className = 'bi bi-check-circle-fill text-white';
+                status.textContent = 'Pressed';
+                status.className = 'text-success';
+
+                if (!lastState) {
+                    pressCount++;
+                    document.getElementById('pressCount').textContent = pressCount;
+                    addEvent('Button PRESSED');
+                }
+            } else {
+                visual.classList.remove('pressed');
+                icon.className = 'bi bi-circle-fill text-secondary';
+                status.textContent = 'Not Pressed';
+                status.className = 'text-secondary';
+
+                if (lastState) {
+                    addEvent('Button RELEASED');
+                }
+            }
+
+            lastState = pressed;
+        }
+
+        function startMonitoring() {
+            monitoring = true;
+            errorCount = 0;
+            document.getElementById('startBtn').classList.add('d-none');
+            document.getElementById('stopBtn').classList.remove('d-none');
+            addEvent('Monitoring started');
+
+            // Test the API first
+            fetch('/_api/button/status')
+                .then(response => {
+                    console.log('Button API test response:', response.status);
+                    if (!response.ok) {
+                        throw new Error('HTTP ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Button API test data:', data);
+                    if (data.pressed !== undefined) {
+                        updateButtonState(data.pressed);
+                    }
+                })
+                .catch(error => {
+                    console.error('Button API test failed:', error);
+                    addEvent('API Error: ' + error.message);
+                    alert('Failed to connect to button API: ' + error.message + '\n\nMake sure the firmware is uploaded.');
+                    stopMonitoring();
+                    return;
+                });
+
+            monitorInterval = setInterval(() => {
+                fetch('/_api/button/status')
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('HTTP ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        errorCount = 0; // Reset on success
+                        if (data.pressed !== undefined) {
+                            updateButtonState(data.pressed);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error reading button:', error);
+                        errorCount++;
+
+                        if (errorCount >= MAX_ERRORS) {
+                            addEvent('Lost connection after ' + MAX_ERRORS + ' errors');
+                            alert('Lost connection to button API');
+                            stopMonitoring();
+                        }
+                    });
+            }, 50); // Poll 20 times per second
+        }
+
+        function stopMonitoring() {
+            monitoring = false;
+            if (monitorInterval) {
+                clearInterval(monitorInterval);
+                monitorInterval = null;
+            }
+
+            document.getElementById('startBtn').classList.remove('d-none');
+            document.getElementById('stopBtn').classList.add('d-none');
+            addEvent('Monitoring stopped');
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '<div class="text-muted text-center">No events yet</div>';
+            pressCount = 0;
+            document.getElementById('pressCount').textContent = pressCount;
+        }
+    </script>
+</body>
+
+</html>

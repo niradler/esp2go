@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO - GPIO Control</title>
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            color: #333;
+        }
+
+        .pin-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #6c757d;
+        }
+
+        .pin-card.output {
+            border-left-color: #28a745;
+        }
+
+        .pin-card.input {
+            border-left-color: #007bff;
+        }
+
+        .pin-card.high {
+            background: #d4edda;
+        }
+
+        .pin-card.low {
+            background: #f8f9fa;
+        }
+
+        .pin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .pin-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+
+        .btn-group-sm .btn {
+            font-size: 0.8rem;
+        }
+
+        .reserved-pins {
+            background: #fff3cd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="text-center mb-4">
+            <h1 class="text-primary"><i class="bi bi-bezier"></i> GPIO Control</h1>
+            <p class="text-muted">ESP32-S3 Pin Configuration</p>
+        </div>
+
+        <div class="reserved-pins">
+            <h6><i class="bi bi-exclamation-triangle"></i> Reserved Pins</h6>
+            <small>
+                <strong>GPIO 35:</strong> RGB LED |
+                <strong>GPIO 38,39:</strong> Microphone |
+                <strong>GPIO 41:</strong> Button |
+                <strong>GPIO 14,17,42,40:</strong> SD Card
+            </small>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="number" class="form-control" id="newPin" placeholder="GPIO Pin Number (e.g. 5)" min="1"
+                        max="48">
+                    <select class="form-select" id="pinMode" style="max-width: 180px;">
+                        <option value="OUTPUT">OUTPUT</option>
+                        <option value="INPUT">INPUT</option>
+                        <option value="INPUT_PULLUP">INPUT_PULLUP</option>
+                        <option value="INPUT_PULLDOWN">INPUT_PULLDOWN</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="addPin()">
+                        <i class="bi bi-plus-circle"></i> Add Pin
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-info w-100" onclick="loadAvailablePins()">
+                    <i class="bi bi-info-circle"></i> Show Available Pins
+                </button>
+            </div>
+        </div>
+
+        <div id="pinList" class="mb-3">
+            <!-- Pin controls will be added here -->
+        </div>
+
+        <div class="alert alert-info">
+            <small>
+                <i class="bi bi-lightbulb"></i>
+                <strong>Tips:</strong> Add GPIO pins to control them. OUTPUT pins can be toggled HIGH/LOW. INPUT pins
+                show current state.
+            </small>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const pins = {};
+        let monitoringInterval = null;
+
+        function createPinCard(pin, mode) {
+            const card = document.createElement('div');
+            card.className = `pin-card ${mode.includes('INPUT') ? 'input' : 'output'}`;
+            card.id = `pin-${pin}`;
+
+            const controls = mode === 'OUTPUT' ? `
+                <div class="btn-group btn-group-sm" role="group">
+                    <button class="btn btn-success" onclick="writePin(${pin}, 1)">HIGH</button>
+                    <button class="btn btn-secondary" onclick="writePin(${pin}, 0)">LOW</button>
+                </div>
+            ` : `
+                <span class="badge bg-secondary" id="pin-${pin}-value">Reading...</span>
+            `;
+
+            card.innerHTML = `
+                <div class="pin-header">
+                    <div>
+                        <span class="pin-number">GPIO ${pin}</span>
+                        <span class="badge bg-info">${mode}</span>
+                    </div>
+                    <div>
+                        ${controls}
+                        <button class="btn btn-danger btn-sm ms-2" onclick="removePin(${pin})">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            return card;
+        }
+
+        async function addPin() {
+            const pin = parseInt(document.getElementById('newPin').value);
+            const mode = document.getElementById('pinMode').value;
+
+            if (!pin || pin < 1 || pin > 48) {
+                alert('Please enter a valid GPIO pin number (1-48)');
+                return;
+            }
+
+            if (pins[pin]) {
+                alert(`GPIO ${pin} is already configured`);
+                return;
+            }
+
+            try {
+                const response = await fetch('/_api/gpio/mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin, mode })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    alert('Error: ' + (data.error || 'Failed to configure pin'));
+                    return;
+                }
+
+                pins[pin] = { mode, value: 0 };
+                document.getElementById('pinList').appendChild(createPinCard(pin, mode));
+                document.getElementById('newPin').value = '';
+
+                startMonitoring();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function writePin(pin, value) {
+            try {
+                const response = await fetch('/_api/gpio/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin, value })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert('Error: ' + (data.error || 'Failed to write pin'));
+                    return;
+                }
+
+                pins[pin].value = value;
+                updatePinDisplay(pin, value);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function readPin(pin) {
+            try {
+                const response = await fetch(`/_api/gpio/read?pin=${pin}`);
+                const data = await response.json();
+
+                if (response.ok && data.value !== undefined) {
+                    pins[pin].value = data.value;
+                    updatePinDisplay(pin, data.value);
+                }
+            } catch (error) {
+                console.error(`Error reading GPIO ${pin}:`, error);
+            }
+        }
+
+        function updatePinDisplay(pin, value) {
+            const card = document.getElementById(`pin-${pin}`);
+            if (card) {
+                if (pins[pin].mode === 'OUTPUT') {
+                    card.className = `pin-card output ${value ? 'high' : 'low'}`;
+                } else {
+                    const badge = document.getElementById(`pin-${pin}-value`);
+                    if (badge) {
+                        badge.textContent = value ? 'HIGH' : 'LOW';
+                        badge.className = `badge ${value ? 'bg-success' : 'bg-secondary'}`;
+                    }
+                    card.className = `pin-card input ${value ? 'high' : 'low'}`;
+                }
+            }
+        }
+
+        function removePin(pin) {
+            if (confirm(`Remove GPIO ${pin}?`)) {
+                const card = document.getElementById(`pin-${pin}`);
+                if (card) {
+                    card.remove();
+                }
+                delete pins[pin];
+
+                if (Object.keys(pins).length === 0) {
+                    stopMonitoring();
+                }
+            }
+        }
+
+        function startMonitoring() {
+            if (monitoringInterval) return;
+
+            monitoringInterval = setInterval(() => {
+                Object.keys(pins).forEach(pin => {
+                    if (pins[pin].mode.includes('INPUT')) {
+                        readPin(pin);
+                    }
+                });
+            }, 500); // Read inputs every 500ms
+        }
+
+        function stopMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+            }
+        }
+
+        async function loadAvailablePins() {
+            try {
+                const response = await fetch('/_api/gpio/pins');
+                const data = await response.json();
+
+                const message = `
+Available Pins: ${data.available.join(', ')}
+
+Reserved Pins: ${data.reserved.join(', ')}
+
+You can use any available pin for GPIO control.
+                `;
+
+                alert(message);
+            } catch (error) {
+                alert('Error loading pin info: ' + error.message);
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopMonitoring();
+        });
+    </script>
+</body>
+
+</html>

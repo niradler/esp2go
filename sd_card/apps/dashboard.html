@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-S3 Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+        .app-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .app-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            border-color: #667eea;
+        }
+        .app-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+        .system-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="dashboard-card">
+            <div class="text-center mb-4">
+                <h1 class="text-primary"><i class="bi bi-cpu"></i> ESP32-S3 Control Panel</h1>
+                <p class="text-muted">M5Stack AtomS3U</p>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <a href="/index.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-primary">
+                                <i class="bi bi-folder2-open"></i>
+                            </div>
+                            <h4>File Manager</h4>
+                            <p class="text-muted mb-0">Browse and manage SD card files</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/apps/led_app.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-danger">
+                                <i class="bi bi-lightbulb"></i>
+                            </div>
+                            <h4>LED Control</h4>
+                            <p class="text-muted mb-0">Control RGB LED colors</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/apps/mic_app.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-success">
+                                <i class="bi bi-mic"></i>
+                            </div>
+                            <h4>Microphone</h4>
+                            <p class="text-muted mb-0">Monitor audio levels</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/apps/button_app.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-warning">
+                                <i class="bi bi-toggle-on"></i>
+                            </div>
+                            <h4>Button Monitor</h4>
+                            <p class="text-muted mb-0">Track button press events</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/apps/gpio_app.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-primary">
+                                <i class="bi bi-bezier"></i>
+                            </div>
+                            <h4>GPIO Control</h4>
+                            <p class="text-muted mb-0">Control any GPIO pin</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/os/ota_update.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-warning">
+                                🔄
+                            </div>
+                            <h4>OTA Update</h4>
+                            <p class="text-muted mb-0">Update firmware wirelessly</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/docs/api_docs.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-info">
+                                <i class="bi bi-code-square"></i>
+                            </div>
+                            <h4>API Documentation</h4>
+                            <p class="text-muted mb-0">Interactive Swagger UI</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/api_test.html" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-primary">
+                                <i class="bi bi-bug"></i>
+                            </div>
+                            <h4>API Test</h4>
+                            <p class="text-muted mb-0">Test all API endpoints</p>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a href="/API.md" class="app-card" target="_blank">
+                        <div class="text-center">
+                            <div class="app-icon text-secondary">
+                                <i class="bi bi-book"></i>
+                            </div>
+                            <h4>API Guide</h4>
+                            <p class="text-muted mb-0">API reference documentation</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <div class="system-info">
+                <h5 class="mb-3"><i class="bi bi-info-circle"></i> System Status</h5>
+                <div class="stat-item">
+                    <span><i class="bi bi-wifi"></i> WiFi</span>
+                    <strong id="wifi-status">Loading...</strong>
+                </div>
+                <div class="stat-item">
+                    <span><i class="bi bi-hdd"></i> Free Heap</span>
+                    <strong id="free-heap">Loading...</strong>
+                </div>
+                <div class="stat-item">
+                    <span><i class="bi bi-clock"></i> Uptime</span>
+                    <strong id="uptime">Loading...</strong>
+                </div>
+                <div class="stat-item">
+                    <span><i class="bi bi-sd-card"></i> SD Card</span>
+                    <strong id="sd-status">Loading...</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function formatBytes(bytes) {
+            return (bytes / 1024).toFixed(0) + ' KB';
+        }
+
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+
+        function updateSystemInfo() {
+            fetch('/_api/system/info')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('free-heap').textContent = formatBytes(data.free_heap);
+                    document.getElementById('uptime').textContent = formatUptime(data.uptime);
+                })
+                .catch(error => {
+                    console.error('Error fetching system info:', error);
+                });
+
+            fetch('/_api/wifi/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.connected) {
+                        document.getElementById('wifi-status').innerHTML = 
+                            `<span class="text-success">${data.ssid} (${data.rssi} dBm)</span>`;
+                    } else {
+                        document.getElementById('wifi-status').innerHTML = 
+                            `<span class="text-danger">Disconnected</span>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching WiFi status:', error);
+                });
+
+            fetch('/_api/files/list?path=/')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('sd-status').innerHTML = 
+                        `<span class="text-success">Mounted (${data.count} items)</span>`;
+                })
+                .catch(error => {
+                    document.getElementById('sd-status').innerHTML = 
+                        `<span class="text-danger">Not mounted</span>`;
+                });
+        }
+
+        // Update on load
+        updateSystemInfo();
+
+        // Update every 5 seconds
+        setInterval(updateSystemInfo, 5000);
+    </script>
+</body>
+</html>
+

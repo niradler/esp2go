@@ -1,0 +1,11 @@
+{
+    "networks": [
+        {
+            "ssid": "",
+            "password": "",
+            "priority": 1
+        }
+    ],
+    "ap_ssid": "ESP2GO",
+    "ap_password": "12345678"
+}

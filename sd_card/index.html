@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO Dashboard</title>
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .app-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .app-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            border-color: #667eea;
+        }
+
+        .app-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .system-info {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .loading-spinner {
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="dashboard-card">
+            <div class="text-center mb-4">
+                <h1 class="text-primary"><i class="bi bi-rocket-takeoff"></i> ESP2GO</h1>
+                <p class="text-muted">ESP32 Control Dashboard</p>
+            </div>
+
+            <div id="apps-container" class="row">
+                <div class="loading-spinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading apps...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="system-info">
+                <h5 class="mb-3"><i class="bi bi-info-circle"></i> System Status</h5>
+                <div class="stat-item">
+                    <span><i class="bi bi-wifi"></i> WiFi</span>
+                    <strong id="wifi-status">Loading...</strong>
+                </div>
+                <div class="stat-item">
+                    <span><i class="bi bi-hdd"></i> Free Heap</span>
+                    <strong id="free-heap">Loading...</strong>
+                </div>
+                <div class="stat-item">
+                    <span><i class="bi bi-clock"></i> Uptime</span>
+                    <strong id="uptime">Loading...</strong>
+                </div>
+                <div class="stat-item">
+                    <span><i class="bi bi-sd-card"></i> SD Card</span>
+                    <strong id="sd-status">Loading...</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const STATIC_APPS = [
+            {
+                name: 'File Manager',
+                path: '/apps/file_manager.html',
+                icon: 'bi-folder2-open',
+                color: 'primary',
+                description: 'Browse and manage SD card files'
+            },
+            {
+                name: 'OTA Update',
+                path: '/os/ota_update.html',
+                icon: '🔄',
+                color: 'warning',
+                description: 'Update firmware wirelessly'
+            },
+            {
+                name: 'API Documentation',
+                path: '/docs/api_docs.html',
+                icon: 'bi-code-square',
+                color: 'info',
+                description: 'Interactive Swagger UI'
+            }
+        ];
+
+        const APP_METADATA = {
+            'led_app.html': { name: 'LED Control', icon: 'bi-lightbulb', color: 'danger', description: 'Control RGB LED colors' },
+            'mic_app.html': { name: 'Microphone', icon: 'bi-mic', color: 'success', description: 'Monitor audio levels' },
+            'button_app.html': { name: 'Button Monitor', icon: 'bi-toggle-on', color: 'warning', description: 'Track button press events' },
+            'gpio_app.html': { name: 'GPIO Control', icon: 'bi-bezier', color: 'primary', description: 'Control any GPIO pin' }
+        };
+
+        function formatBytes(bytes) {
+            return (bytes / 1024).toFixed(0) + ' KB';
+        }
+
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours}h ${minutes}m ${secs}s`;
+        }
+
+        function createAppCard(app) {
+            const isEmoji = !app.icon.startsWith('bi-');
+            const iconHtml = isEmoji ? app.icon : `<i class="${app.icon}"></i>`;
+
+            return `
+                <div class="col-md-6">
+                    <a href="${app.path}" class="app-card">
+                        <div class="text-center">
+                            <div class="app-icon text-${app.color}">
+                                ${iconHtml}
+                            </div>
+                            <h4>${app.name}</h4>
+                            <p class="text-muted mb-0">${app.description}</p>
+                        </div>
+                    </a>
+                </div>
+            `;
+        }
+
+        function loadApps() {
+            fetch('/_api/files/list?path=/apps')
+                .then(response => response.json())
+                .then(data => {
+                    const apps = [...STATIC_APPS];
+
+                    if (data.files) {
+                        data.files.forEach(file => {
+                            if (file.name.endsWith('.html')) {
+                                const metadata = APP_METADATA[file.name];
+                                if (metadata) {
+                                    apps.push({
+                                        name: metadata.name,
+                                        path: `/apps/${file.name}`,
+                                        icon: metadata.icon,
+                                        color: metadata.color,
+                                        description: metadata.description
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    const container = document.getElementById('apps-container');
+                    container.innerHTML = apps.map(createAppCard).join('');
+                })
+                .catch(error => {
+                    console.error('Error loading apps:', error);
+                    const container = document.getElementById('apps-container');
+                    container.innerHTML = STATIC_APPS.map(createAppCard).join('');
+                });
+        }
+
+        function updateSystemInfo() {
+            fetch('/_api/system/info')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('free-heap').textContent = formatBytes(data.free_heap);
+                    document.getElementById('uptime').textContent = formatUptime(data.uptime);
+                })
+                .catch(error => {
+                    console.error('Error fetching system info:', error);
+                });
+
+            fetch('/_api/wifi/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.connected) {
+                        document.getElementById('wifi-status').innerHTML =
+                            `<span class="text-success">${data.ssid} (${data.rssi} dBm)</span>`;
+                    } else {
+                        document.getElementById('wifi-status').innerHTML =
+                            `<span class="text-danger">Disconnected</span>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching WiFi status:', error);
+                });
+
+            fetch('/_api/files/list?path=/')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('sd-status').innerHTML =
+                        `<span class="text-success">Mounted (${data.count} items)</span>`;
+                })
+                .catch(error => {
+                    document.getElementById('sd-status').innerHTML =
+                        `<span class="text-danger">Not mounted</span>`;
+                });
+        }
+
+        loadApps();
+        updateSystemInfo();
+        setInterval(updateSystemInfo, 5000);
+    </script>
+</body>
+
+</html>

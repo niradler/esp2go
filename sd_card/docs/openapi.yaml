@@ -1,0 +1,725 @@
+openapi: 3.0.3
+info:
+  title: ESP2GO API
+  description: |
+    Complete REST API for ESP2GO - ESP32 Storage & Control System.
+    
+    ## Features
+    - File management (list, upload, download, delete)
+    - Hardware control (RGB LED, GPIO)
+    - Sensor monitoring (microphone, button)
+    - System information (WiFi, memory, uptime)
+    - OTA firmware updates
+    
+    ## Access
+    - Local IP: `http://<ESP32_IP>/`
+    - mDNS: `http://esp2go.local/`
+    
+    ## API Structure
+    All endpoints follow the pattern: `/_api/{category}/{action}`
+  version: 1.0.0
+  contact:
+    name: ESP2GO Project
+  license:
+    name: MIT
+
+servers:
+  - url: http://esp2go.local
+    description: ESP2GO device (mDNS)
+  - url: http://192.168.1.100
+    description: ESP2GO device (update with your device IP)
+
+tags:
+  - name: System
+    description: System information and status
+  - name: WiFi
+    description: WiFi connection management
+  - name: Hardware
+    description: Onboard hardware control (LED, Button, Microphone)
+  - name: GPIO
+    description: General purpose I/O control
+  - name: Files
+    description: SD card file management
+  - name: OTA
+    description: Over-the-air firmware updates
+
+paths:
+  /_api/system/info:
+    get:
+      tags:
+        - System
+      summary: Get system information
+      description: Returns chip info, memory stats, and uptime
+      responses:
+        '200':
+          description: System information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chip:
+                    type: string
+                    example: ESP32-S3
+                  revision:
+                    type: integer
+                    example: 0
+                  cpu_freq:
+                    type: integer
+                    description: CPU frequency in MHz
+                    example: 240
+                  free_heap:
+                    type: integer
+                    description: Free heap memory in bytes
+                    example: 204760
+                  flash_size:
+                    type: integer
+                    description: Flash size in bytes
+                    example: 8388608
+                  uptime:
+                    type: integer
+                    description: Uptime in seconds
+                    example: 3600
+
+  /_api/wifi/status:
+    get:
+      tags:
+        - WiFi
+      summary: Get WiFi status
+      description: Returns current WiFi connection details
+      responses:
+        '200':
+          description: WiFi status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                    example: true
+                  ssid:
+                    type: string
+                    example: "MyNetwork"
+                  ip:
+                    type: string
+                    example: "192.168.1.100"
+                  rssi:
+                    type: integer
+                    description: Signal strength in dBm
+                    example: -45
+                  mac:
+                    type: string
+                    example: "AA:BB:CC:DD:EE:FF"
+
+  /_api/led/set:
+    post:
+      tags:
+        - Hardware
+      summary: Set RGB LED color
+      description: Control the onboard RGB LED (GPIO 35)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - r
+                - g
+                - b
+              properties:
+                r:
+                  type: integer
+                  minimum: 0
+                  maximum: 255
+                  description: Red component
+                  example: 255
+                g:
+                  type: integer
+                  minimum: 0
+                  maximum: 255
+                  description: Green component
+                  example: 128
+                b:
+                  type: integer
+                  minimum: 0
+                  maximum: 255
+                  description: Blue component
+                  example: 0
+      responses:
+        '200':
+          description: LED color set successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /_api/mic/level:
+    get:
+      tags:
+        - Hardware
+      summary: Get microphone audio level
+      description: Returns current audio level from PDM microphone
+      responses:
+        '200':
+          description: Audio level
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  level:
+                    type: integer
+                    minimum: 0
+                    maximum: 100
+                    description: Audio level (0-100)
+                    example: 45
+                  initialized:
+                    type: boolean
+                    example: true
+                  recording:
+                    type: boolean
+                    example: false
+                  duration:
+                    type: integer
+                    description: Recording duration in seconds (if recording)
+                    example: 30
+
+  /_api/mic/record/start:
+    post:
+      tags:
+        - Hardware
+      summary: Start audio recording
+      description: Start recording audio to SD card
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                  description: Output filename (will add .wav extension if missing)
+                  example: recording.wav
+      responses:
+        '200':
+          description: Recording started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: recording
+        '500':
+          description: Failed to start recording
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/mic/record/stop:
+    post:
+      tags:
+        - Hardware
+      summary: Stop audio recording
+      description: Stop current audio recording
+      responses:
+        '200':
+          description: Recording stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: stopped
+
+  /_api/mic/record/status:
+    get:
+      tags:
+        - Hardware
+      summary: Get recording status
+      description: Check if currently recording
+      responses:
+        '200':
+          description: Recording status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recording:
+                    type: boolean
+                    example: false
+                  duration:
+                    type: integer
+                    description: Recording duration in seconds
+                    example: 0
+
+  /_api/button/status:
+    get:
+      tags:
+        - Hardware
+      summary: Get button status
+      description: Returns current state of onboard button (GPIO 41)
+      responses:
+        '200':
+          description: Button status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pressed:
+                    type: boolean
+                    description: True if button is currently pressed
+                    example: false
+
+  /_api/gpio/mode:
+    post:
+      tags:
+        - GPIO
+      summary: Set GPIO pin mode
+      description: Configure a GPIO pin mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pin
+                - mode
+              properties:
+                pin:
+                  type: integer
+                  description: GPIO pin number
+                  example: 5
+                mode:
+                  type: string
+                  enum: [INPUT, OUTPUT, INPUT_PULLUP, INPUT_PULLDOWN]
+                  description: Pin mode
+                  example: OUTPUT
+      responses:
+        '200':
+          description: Pin mode set successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /_api/gpio/write:
+    post:
+      tags:
+        - GPIO
+      summary: Write digital value to GPIO pin
+      description: Set digital output value on a GPIO pin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pin
+                - value
+              properties:
+                pin:
+                  type: integer
+                  description: GPIO pin number
+                  example: 5
+                value:
+                  type: integer
+                  enum: [0, 1]
+                  description: Digital value (0=LOW, 1=HIGH)
+                  example: 1
+      responses:
+        '200':
+          description: Value written successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /_api/gpio/read:
+    get:
+      tags:
+        - GPIO
+      summary: Read digital value from GPIO pin
+      description: Read current digital state of a GPIO pin
+      parameters:
+        - name: pin
+          in: query
+          description: GPIO pin number
+          required: true
+          schema:
+            type: integer
+          example: 5
+      responses:
+        '200':
+          description: Pin value
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pin:
+                    type: integer
+                    example: 5
+                  value:
+                    type: integer
+                    enum: [0, 1]
+                    description: Digital value (0=LOW, 1=HIGH)
+                    example: 1
+
+  /_api/gpio/analog:
+    get:
+      tags:
+        - GPIO
+      summary: Read analog value from GPIO pin
+      description: Read analog value (ADC) from a GPIO pin
+      parameters:
+        - name: pin
+          in: query
+          description: GPIO pin number (must support ADC)
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        '200':
+          description: Analog value
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pin:
+                    type: integer
+                    example: 1
+                  value:
+                    type: integer
+                    minimum: 0
+                    maximum: 4095
+                    description: Analog value (0-4095, 12-bit)
+                    example: 2048
+
+  /_api/gpio/pins:
+    get:
+      tags:
+        - GPIO
+      summary: List available GPIO pins
+      description: Get list of available GPIO pins on the board
+      responses:
+        '200':
+          description: Available GPIO pins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: array
+                    items:
+                      type: integer
+                    example: [1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+
+  /_api/files/list:
+    get:
+      tags:
+        - Files
+      summary: List directory contents
+      description: List files and folders in a directory (non-recursive)
+      parameters:
+        - name: path
+          in: query
+          description: Directory path to list
+          required: false
+          schema:
+            type: string
+            default: /
+          example: /apps
+      responses:
+        '200':
+          description: Directory listing
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  path:
+                    type: string
+                    example: /
+                  count:
+                    type: integer
+                    example: 5
+                  files:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                          example: index.html
+                        size:
+                          type: integer
+                          description: File size in bytes
+                          example: 2048
+                        isDir:
+                          type: boolean
+                          example: false
+        '404':
+          description: Path not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/files/info:
+    get:
+      tags:
+        - Files
+      summary: Get file information
+      description: Get details about a specific file
+      parameters:
+        - name: path
+          in: query
+          description: File path
+          required: true
+          schema:
+            type: string
+          example: /index.html
+      responses:
+        '200':
+          description: File information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: index.html
+                  size:
+                    type: integer
+                    example: 2048
+                  isDir:
+                    type: boolean
+                    example: false
+                  path:
+                    type: string
+                    example: /index.html
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/files/download:
+    get:
+      tags:
+        - Files
+      summary: Download a file
+      description: Download a file from SD card
+      parameters:
+        - name: path
+          in: query
+          description: File path to download
+          required: true
+          schema:
+            type: string
+          example: /data/log.txt
+      responses:
+        '200':
+          description: File content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid path or trying to download directory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/files/delete:
+    delete:
+      tags:
+        - Files
+      summary: Delete a file or directory
+      description: |
+        Delete a file or empty directory from SD card.
+        Protected files (/, /index.html) cannot be deleted.
+      parameters:
+        - name: path
+          in: query
+          description: Path to delete
+          required: true
+          schema:
+            type: string
+          example: /old_file.txt
+      responses:
+        '200':
+          description: File deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: deleted
+        '400':
+          description: Invalid path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Cannot delete protected file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: File not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Delete failed (file in use or directory not empty)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/files/upload:
+    post:
+      tags:
+        - Files
+      summary: Upload a file
+      description: Upload a file to the SD card root directory
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File to upload
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: uploaded
+        '500':
+          description: Upload failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/ota/update:
+    post:
+      tags:
+        - OTA
+      summary: Trigger OTA firmware update
+      description: |
+        Upload and flash new firmware from SD card.
+        Requires OTA password if configured.
+      parameters:
+        - name: file
+          in: query
+          description: Firmware file path on SD card
+          required: false
+          schema:
+            type: string
+            default: /firmware.bin
+          example: /firmware.bin
+      security:
+        - OTAPassword: []
+      responses:
+        '200':
+          description: Update scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  message:
+                    type: string
+                    example: OTA update will start shortly...
+        '401':
+          description: Password required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Firmware file not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    OTAPassword:
+      type: apiKey
+      in: header
+      name: X-OTA-Password
+      description: OTA update password (if configured)
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: File not found
