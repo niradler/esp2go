@@ -5,12 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ESP2GO - File Manager</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🚀</text></svg>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body {
-            padding-bottom: 120px;
+            padding-bottom: 140px;
             background: #f8f9fa;
         }
 
@@ -18,10 +19,43 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
+        .drag-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(13, 110, 253, 0.9);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            pointer-events: none;
+        }
+
+        .drag-overlay.show {
+            display: flex;
+        }
+
+        .breadcrumb-bar {
+            background: white;
+            padding: 12px 15px;
+            border-bottom: 1px solid #dee2e6;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .breadcrumb {
+            margin: 0;
+        }
+
         .file-item {
             cursor: pointer;
             border-left: 3px solid transparent;
             transition: all 0.2s;
+            position: relative;
         }
 
         .file-item:hover {
@@ -32,6 +66,12 @@
         .file-item.selected {
             background: #e7f1ff !important;
             border-left-color: #0d6efd;
+        }
+
+        .file-item.drag-over {
+            background: #cfe2ff !important;
+            border-left-color: #0d6efd;
+            border: 2px dashed #0d6efd;
         }
 
         .file-icon {
@@ -48,20 +88,45 @@
         }
 
         .btn-action {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             padding: 0;
+            flex-shrink: 0;
         }
 
-        .fab-upload {
+        .btn-group-sm {
+            flex-shrink: 0;
+        }
+
+        .fab-container {
             position: fixed;
             bottom: 140px;
             right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .fab-btn {
             width: 56px;
             height: 56px;
             border-radius: 50%;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            transition: transform 0.2s;
+        }
+
+        .fab-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .fab-btn:active {
+            transform: scale(0.95);
         }
 
         .bottom-bar {
@@ -90,16 +155,6 @@
             background: #f8f9fa;
         }
 
-        .folder-children {
-            padding-left: 20px;
-            border-left: 2px solid #dee2e6;
-            margin-left: 10px;
-        }
-
-        .collapse {
-            transition: height 0.3s ease;
-        }
-
         .upload-progress {
             position: fixed;
             top: 70px;
@@ -118,26 +173,97 @@
         .checkbox-col {
             width: 40px;
         }
+
+        .context-menu {
+            position: fixed;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            display: none;
+            min-width: 180px;
+        }
+
+        .context-menu.show {
+            display: block;
+        }
+
+        .context-menu-item {
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .context-menu-item:last-child {
+            border-bottom: none;
+        }
+
+        .context-menu-item:hover {
+            background: #f8f9fa;
+        }
+
+        .context-menu-item i {
+            width: 20px;
+            margin-right: 10px;
+        }
+
+        .folder-upload-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .file-item:hover .folder-upload-btn {
+            opacity: 1;
+        }
+
+        .file-item .file-actions {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 
 <body>
+    <!-- Drag & Drop Overlay -->
+    <div class="drag-overlay" id="dragOverlay">
+        <div>
+            <i class="bi bi-cloud-upload fs-1"></i>
+            <div id="dragOverlayText">Drop files here</div>
+        </div>
+    </div>
+
+    <!-- Navbar -->
     <nav class="navbar navbar-dark bg-primary">
         <div class="container-fluid">
             <span class="navbar-brand mb-0 h1">
-                <i class="bi bi-hdd-network"></i> ESP2GO
+                <i class="bi bi-hdd-network"></i> ESP2GO - File Manager
             </span>
             <div>
-                <button class="btn btn-light btn-sm" onclick="toggleSelectionMode()" id="selectBtn">
+                <button class="btn btn-light btn-sm me-2" onclick="FileManager.createFolder()" title="New Folder">
+                    <i class="bi bi-folder-plus"></i>
+                </button>
+                <button class="btn btn-light btn-sm me-2" onclick="FileManager.toggleSelectionMode()" id="selectBtn"
+                    title="Select">
                     <i class="bi bi-check-square"></i>
                 </button>
-                <button class="btn btn-light btn-sm" onclick="loadFiles()">
+                <button class="btn btn-light btn-sm" onclick="FileManager.refresh()" title="Refresh">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
             </div>
         </div>
     </nav>
 
+    <!-- Breadcrumb Navigation -->
+    <div class="breadcrumb-bar">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb" id="breadcrumb"></ol>
+        </nav>
+    </div>
+
+    <!-- Upload Progress -->
     <div class="upload-progress" id="uploadProgress">
         <div class="card shadow">
             <div class="card-body">
@@ -146,29 +272,58 @@
                     <span id="uploadFileNum"></span>
                 </div>
                 <div class="progress">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="uploadProgressBar" style="width: 0%"></div>
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="uploadProgressBar"
+                        style="width: 0%"></div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- File List -->
     <div class="container-fluid mt-3" id="fileList"></div>
 
-    <button class="btn btn-primary fab-upload" onclick="document.getElementById('fileInput').click()">
-        <i class="bi bi-plus-lg fs-4"></i>
-    </button>
+    <!-- Floating Action Buttons -->
+    <div class="fab-container" id="fabContainer">
+        <button class="fab-btn btn btn-warning" onclick="FileManager.uploadToCurrentFolder(true)" title="Upload Folder">
+            <i class="bi bi-folder-plus fs-4"></i>
+        </button>
+        <button class="fab-btn btn btn-success" onclick="FileManager.uploadToCurrentFolder(false)" title="Upload Files">
+            <i class="bi bi-file-earmark-plus fs-4"></i>
+        </button>
+    </div>
 
-    <input type="file" id="fileInput" style="display: none" multiple onchange="uploadFiles()">
+    <input type="file" id="fileInput" style="display: none" multiple>
+    <input type="file" id="folderInput" style="display: none" webkitdirectory directory>
 
+    <!-- Context Menu -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="FileManager.contextMenuAction('rename')">
+            <i class="bi bi-pencil"></i> Rename
+        </div>
+        <div class="context-menu-item" onclick="FileManager.contextMenuAction('download')">
+            <i class="bi bi-download"></i> Download
+        </div>
+        <div class="context-menu-item" onclick="FileManager.contextMenuAction('move')">
+            <i class="bi bi-arrows-move"></i> Move
+        </div>
+        <div class="context-menu-item text-danger" onclick="FileManager.contextMenuAction('delete')">
+            <i class="bi bi-trash"></i> Delete
+        </div>
+    </div>
+
+    <!-- Bottom Bar -->
     <div class="bottom-bar">
         <div class="selection-bar" id="selectionBar">
             <div class="d-flex justify-content-between align-items-center">
                 <span id="selectionCount">0 selected</span>
                 <div>
-                    <button class="btn btn-light btn-sm me-2" onclick="clearSelection()">
+                    <button class="btn btn-light btn-sm me-2" onclick="FileManager.moveSelected()">
+                        <i class="bi bi-arrows-move"></i> Move
+                    </button>
+                    <button class="btn btn-light btn-sm me-2" onclick="FileManager.clearSelection()">
                         <i class="bi bi-x-lg"></i> Clear
                     </button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteSelected()">
+                    <button class="btn btn-danger btn-sm" onclick="FileManager.deleteSelected()">
                         <i class="bi bi-trash"></i> Delete
                     </button>
                 </div>
@@ -179,7 +334,10 @@
                 <small class="text-muted">Files: <span id="fileCount">0</span></small>
             </div>
             <div class="text-center">
-                <small class="text-muted">Free: <span id="freeSpace">-</span></small>
+                <small class="text-muted">SD: <span id="sdCardUsage">-</span></small>
+            </div>
+            <div class="text-center">
+                <small class="text-muted">RAM: <span id="freeHeap">-</span></small>
             </div>
             <div class="text-center">
                 <small class="text-muted">IP: <span id="ipAddress">-</span></small>
@@ -188,297 +346,765 @@
     </div>
 
     <script>
-        let expandedFolders = new Set();
-        let selectionMode = false;
-        let selectedFiles = new Set();
+        // ============================================
+        // File Manager - Complete Production Ready
+        // ============================================
+        const FileManager = {
+            // State
+            currentPath: '/',
+            selectionMode: false,
+            selectedFiles: new Set(),
+            contextMenuTarget: null,
+            dragOverFolder: null,
+            uploadTargetPath: '/',
 
-        function toggleSelectionMode() {
-            selectionMode = !selectionMode;
-            selectedFiles.clear();
-            updateSelectionUI();
-            loadFiles();
-        }
+            // ============================================
+            // Initialization
+            // ============================================
+            init() {
+                this.setupDragDrop();
+                this.setupContextMenu();
+                this.setupFileInputs();
+                this.loadFiles('/');
+            },
 
-        function updateSelectionUI() {
-            const selectionBar = document.getElementById('selectionBar');
-            const selectBtn = document.getElementById('selectBtn');
-            
-            if (selectionMode) {
-                selectBtn.classList.add('active');
-                selectionBar.classList.add('show');
-            } else {
-                selectBtn.classList.remove('active');
-                selectionBar.classList.remove('show');
-            }
-            
-            document.getElementById('selectionCount').textContent = selectedFiles.size + ' selected';
-        }
+            setupFileInputs() {
+                document.getElementById('fileInput').addEventListener('change', (e) => {
+                    this.handleFileInputChange(e.target);
+                });
+                document.getElementById('folderInput').addEventListener('change', (e) => {
+                    this.handleFileInputChange(e.target);
+                });
+            },
 
-        function toggleFileSelection(path) {
-            if (selectedFiles.has(path)) {
-                selectedFiles.delete(path);
-            } else {
-                selectedFiles.add(path);
-            }
-            updateSelectionUI();
-            
-            const item = document.querySelector(`[data-path="${path}"]`);
-            if (item) {
-                item.classList.toggle('selected', selectedFiles.has(path));
-            }
-        }
+            setupContextMenu() {
+                // Hide context menu on click outside
+                document.addEventListener('click', () => {
+                    document.getElementById('contextMenu').classList.remove('show');
+                });
 
-        function clearSelection() {
-            selectedFiles.clear();
-            updateSelectionUI();
-            document.querySelectorAll('.file-item.selected').forEach(el => {
-                el.classList.remove('selected');
-            });
-        }
+                // Prevent default context menu
+                document.getElementById('fileList').addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                });
+            },
 
-        async function deleteSelected() {
-            if (selectedFiles.size === 0) return;
-            
-            if (!confirm(`Delete ${selectedFiles.size} file(s)?`)) return;
+            setupDragDrop() {
+                const overlay = document.getElementById('dragOverlay');
+                let dragCounter = 0;
 
-            const paths = Array.from(selectedFiles);
-            let successCount = 0;
-            let failCount = 0;
+                document.addEventListener('dragenter', (e) => {
+                    e.preventDefault();
+                    dragCounter++;
+                    overlay.classList.add('show');
+                    document.getElementById('dragOverlayText').textContent =
+                        `Drop to upload to: ${this.currentPath}`;
+                });
 
-            for (const path of paths) {
-                try {
-                    const response = await fetch('/_api/files/delete?path=' + encodeURIComponent(path), { 
-                        method: 'DELETE' 
-                    });
-                    
-                    if (response.ok) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                        console.error('Failed to delete:', path);
+                document.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    dragCounter--;
+                    if (dragCounter === 0) {
+                        overlay.classList.remove('show');
                     }
-                } catch (err) {
-                    failCount++;
-                    console.error('Error deleting:', path, err);
+                });
+
+                document.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+
+                document.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    dragCounter = 0;
+                    overlay.classList.remove('show');
+
+                    const items = e.dataTransfer.items;
+                    if (items) {
+                        await this.handleDroppedItems(items, this.dragOverFolder || this.currentPath);
+                    }
+                    this.dragOverFolder = null;
+                });
+            },
+
+            async handleDroppedItems(items, targetPath) {
+                const files = [];
+
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i].webkitGetAsEntry();
+                    if (item) {
+                        await this.traverseFileTree(item, '', files);
+                    }
                 }
-            }
 
-            clearSelection();
-            loadFiles();
-            
-            if (failCount > 0) {
-                alert(`Deleted ${successCount} file(s). Failed: ${failCount}`);
-            }
-        }
+                if (files.length > 0) {
+                    await this.uploadFilesList(files, targetPath);
+                }
+            },
 
-        async function loadFiles(path = '/') {
-            try {
-                const res = await fetch('/_api/files/list?path=' + encodeURIComponent(path));
-                const data = await res.json();
+            async traverseFileTree(item, path, files) {
+                return new Promise((resolve) => {
+                    if (item.isFile) {
+                        item.file((file) => {
+                            file.fullPath = path + file.name;
+                            files.push(file);
+                            resolve();
+                        });
+                    } else if (item.isDirectory) {
+                        const dirReader = item.createReader();
+                        dirReader.readEntries(async (entries) => {
+                            for (const entry of entries) {
+                                await this.traverseFileTree(entry, path + item.name + '/', files);
+                            }
+                            resolve();
+                        });
+                    }
+                });
+            },
 
-                if (path === '/') {
-                    document.getElementById('fileList').innerHTML = '';
+            // ============================================
+            // Navigation
+            // ============================================
+            async loadFiles(path) {
+                this.currentPath = path;
+                this.uploadTargetPath = path;
+
+                try {
+                    const res = await fetch('/_api/files/list?path=' + encodeURIComponent(path));
+                    if (!res.ok) throw new Error('Failed to load files');
+
+                    const data = await res.json();
                     document.getElementById('fileCount').textContent = data.count;
-                    renderFiles(data.files, document.getElementById('fileList'), path);
+
+                    this.renderBreadcrumb(path);
+                    this.renderFiles(data.files);
+                    this.loadSystemInfo();
+                } catch (err) {
+                    console.error(err);
+                    alert('Failed to load files: ' + err.message);
                 }
+            },
 
-                loadSystemInfo();
-            } catch (err) {
-                console.error(err);
-                alert('Failed to load files');
-            }
-        }
+            renderBreadcrumb(path) {
+                const breadcrumb = document.getElementById('breadcrumb');
+                breadcrumb.innerHTML = '';
 
-        function renderFiles(files, container, currentPath) {
-            files.sort((a, b) => {
-                if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-                return a.name.localeCompare(b.name);
-            });
+                const parts = path === '/' ? ['/'] : path.split('/').filter(p => p);
+                let currentPath = '';
 
-            files.forEach(file => {
+                // Root
+                const rootLi = document.createElement('li');
+                rootLi.className = 'breadcrumb-item' + (path === '/' ? ' active' : '');
+                if (path === '/') {
+                    rootLi.textContent = 'Root';
+                } else {
+                    const rootLink = document.createElement('a');
+                    rootLink.href = '#';
+                    rootLink.textContent = 'Root';
+                    rootLink.onclick = (e) => {
+                        e.preventDefault();
+                        this.loadFiles('/');
+                    };
+                    rootLi.appendChild(rootLink);
+                }
+                breadcrumb.appendChild(rootLi);
+
+                // Path parts
+                if (path !== '/') {
+                    parts.forEach((part, index) => {
+                        currentPath += '/' + part;
+                        const li = document.createElement('li');
+                        li.className = 'breadcrumb-item' + (index === parts.length - 1 ? ' active' : '');
+
+                        if (index === parts.length - 1) {
+                            li.textContent = part;
+                        } else {
+                            const link = document.createElement('a');
+                            link.href = '#';
+                            link.textContent = part;
+                            const navPath = currentPath;
+                            link.onclick = (e) => {
+                                e.preventDefault();
+                                this.loadFiles(navPath);
+                            };
+                            li.appendChild(link);
+                        }
+                        breadcrumb.appendChild(li);
+                    });
+                }
+            },
+
+            refresh() {
+                this.loadFiles(this.currentPath);
+            },
+
+            // ============================================
+            // File Rendering
+            // ============================================
+            renderFiles(files) {
+                const container = document.getElementById('fileList');
+                container.innerHTML = '';
+
+                files.sort((a, b) => {
+                    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+                files.forEach(file => {
+                    const fullPath = this.currentPath === '/' ?
+                        '/' + file.name :
+                        this.currentPath + '/' + file.name;
+
+                    const item = this.createFileItem(file, fullPath);
+                    container.appendChild(item);
+                });
+            },
+
+            createFileItem(file, fullPath) {
                 const item = document.createElement('div');
                 item.className = 'file-item p-3 bg-white mb-2 rounded shadow-sm';
-                const fullPath = currentPath === '/' ? '/' + file.name : currentPath + '/' + file.name;
                 item.setAttribute('data-path', fullPath);
+                item.setAttribute('data-isdir', file.isDir);
 
-                if (selectedFiles.has(fullPath)) {
+                if (this.selectedFiles.has(fullPath)) {
                     item.classList.add('selected');
+                }
+
+                // Drag and drop for folders
+                if (file.isDir) {
+                    item.setAttribute('draggable', 'false');
+
+                    item.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        item.classList.add('drag-over');
+                        this.dragOverFolder = fullPath;
+                    });
+
+                    item.addEventListener('dragleave', (e) => {
+                        e.stopPropagation();
+                        item.classList.remove('drag-over');
+                    });
+
+                    item.addEventListener('drop', (e) => {
+                        e.stopPropagation();
+                        item.classList.remove('drag-over');
+                    });
                 }
 
                 const icon = file.isDir ?
                     '<i class="bi bi-folder-fill file-icon folder-icon"></i>' :
                     '<i class="bi bi-file-earmark file-icon file-icon-default"></i>';
 
-                const checkboxHtml = selectionMode && !file.isDir ? 
+                const checkboxHtml = this.selectionMode ?
                     `<div class="checkbox-col">
                         <input type="checkbox" class="form-check-input" 
-                            ${selectedFiles.has(fullPath) ? 'checked' : ''}
-                            onchange="event.stopPropagation(); toggleFileSelection('${fullPath}')">
+                            ${this.selectedFiles.has(fullPath) ? 'checked' : ''}
+                            onchange="event.stopPropagation(); FileManager.toggleFileSelection(decodeURIComponent('${encodeURIComponent(fullPath)}'))">
                     </div>` : '';
 
-                const clickHandler = selectionMode && !file.isDir ? 
-                    `toggleFileSelection('${fullPath}')` : 
-                    `handleFileClick('${fullPath}', ${file.isDir})`;
+                const clickHandler = this.selectionMode ?
+                    `FileManager.toggleFileSelection(decodeURIComponent('${encodeURIComponent(fullPath)}'))` :
+                    (file.isDir ? `FileManager.loadFiles(decodeURIComponent('${encodeURIComponent(fullPath)}'))` :
+                        `FileManager.viewFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))`);
+
+                const uploadBtn = file.isDir && !this.selectionMode ?
+                    `<button class="btn btn-sm btn-outline-primary btn-action folder-upload-btn me-2" 
+                            onclick="event.stopPropagation(); FileManager.uploadToFolder(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
+                            title="Upload to this folder">
+                        <i class="bi bi-upload"></i>
+                    </button>` : '';
 
                 item.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center" onclick="${clickHandler}">
+                    <div class="d-flex justify-content-between align-items-center" 
+                         onclick="${clickHandler}"
+                         oncontextmenu="event.preventDefault(); FileManager.showContextMenu(event, decodeURIComponent('${encodeURIComponent(fullPath)}'), ${file.isDir})">
                         ${checkboxHtml}
                         <div class="flex-grow-1">
                             ${icon}
-                            <span class="fw-medium">${file.name}</span>
-                            ${!file.isDir ? '<small class="text-muted ms-2">(' + formatBytes(file.size) + ')</small>' : ''}
+                            <span class="fw-medium">${this.escapeHtml(file.name)}</span>
+                            ${!file.isDir ? '<small class="text-muted ms-2">(' + this.formatBytes(file.size) + ')</small>' : ''}
                         </div>
-                        ${!selectionMode ? `
+                        ${!this.selectionMode ? `
                         <div class="btn-group btn-group-sm">
+                            ${uploadBtn}
+                            <button class="btn btn-outline-secondary btn-action" 
+                                    onclick="event.stopPropagation(); FileManager.renameFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
+                                    title="Rename">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             ${!file.isDir ? `
-                                <button class="btn btn-outline-primary btn-action" onclick="event.stopPropagation(); viewFile('${fullPath}')" title="View">
-                                    <i class="bi bi-eye"></i>
-                                </button>
-                                <button class="btn btn-outline-success btn-action" onclick="event.stopPropagation(); downloadFile('${fullPath}')" title="Download">
+                                <button class="btn btn-outline-success btn-action" 
+                                        onclick="event.stopPropagation(); FileManager.downloadFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
+                                        title="Download">
                                     <i class="bi bi-download"></i>
                                 </button>
                             ` : ''}
-                            <button class="btn btn-outline-danger btn-action" onclick="event.stopPropagation(); deleteFile('${fullPath}')" title="Delete">
+                            <button class="btn btn-outline-danger btn-action" 
+                                    onclick="event.stopPropagation(); FileManager.deleteFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
+                                    title="Delete">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
                         ` : ''}
                     </div>
-                    ${file.isDir ? '<div class="folder-children collapse" id="folder-' + btoa(fullPath) + '"></div>' : ''}
                 `;
 
-                container.appendChild(item);
-            });
-        }
+                return item;
+            },
 
-        async function handleFileClick(path, isDir) {
-            if (isDir) {
-                const folderId = 'folder-' + btoa(path);
-                const folderDiv = document.getElementById(folderId);
+            // ============================================
+            // Context Menu
+            // ============================================
+            showContextMenu(event, path, isDir) {
+                event.preventDefault();
+                event.stopPropagation();
 
-                if (expandedFolders.has(path)) {
-                    folderDiv.classList.remove('show');
-                    folderDiv.innerHTML = '';
-                    expandedFolders.delete(path);
-                } else {
-                    const res = await fetch('/_api/files/list?path=' + encodeURIComponent(path));
-                    const data = await res.json();
-                    folderDiv.innerHTML = '';
-                    renderFiles(data.files, folderDiv, path);
-                    folderDiv.classList.add('show');
-                    expandedFolders.add(path);
+                this.contextMenuTarget = { path, isDir };
+                const menu = document.getElementById('contextMenu');
+
+                menu.style.left = event.pageX + 'px';
+                menu.style.top = event.pageY + 'px';
+                menu.classList.add('show');
+
+                // Hide download for directories
+                const items = menu.children;
+                items[1].style.display = isDir ? 'none' : 'block';
+            },
+
+            contextMenuAction(action) {
+                if (!this.contextMenuTarget) return;
+
+                switch (action) {
+                    case 'rename':
+                        this.renameFile(this.contextMenuTarget.path);
+                        break;
+                    case 'download':
+                        if (!this.contextMenuTarget.isDir) {
+                            this.downloadFile(this.contextMenuTarget.path);
+                        }
+                        break;
+                    case 'move':
+                        this.moveFile(this.contextMenuTarget.path);
+                        break;
+                    case 'delete':
+                        this.deleteFile(this.contextMenuTarget.path);
+                        break;
                 }
-            } else {
-                viewFile(path);
-            }
-        }
 
-        function viewFile(path) {
-            window.open(path, '_blank');
-        }
+                this.contextMenuTarget = null;
+            },
 
-        function downloadFile(path) {
-            const a = document.createElement('a');
-            a.href = path;
-            a.download = path.split('/').pop();
-            a.click();
-        }
+            // ============================================
+            // Selection Mode
+            // ============================================
+            toggleSelectionMode() {
+                this.selectionMode = !this.selectionMode;
+                this.selectedFiles.clear();
+                this.updateSelectionUI();
+                this.renderFiles(Array.from(document.querySelectorAll('.file-item')).map(item => ({
+                    name: item.querySelector('.fw-medium').textContent,
+                    isDir: item.getAttribute('data-isdir') === 'true'
+                })));
+                this.refresh();
+            },
 
-        async function deleteFile(path) {
-            if (!confirm('Delete ' + path + '?')) return;
+            updateSelectionUI() {
+                const selectionBar = document.getElementById('selectionBar');
+                const selectBtn = document.getElementById('selectBtn');
 
-            try {
-                const response = await fetch('/_api/files/delete?path=' + encodeURIComponent(path), { 
-                    method: 'DELETE' 
+                if (this.selectionMode) {
+                    selectBtn.classList.add('active');
+                    selectionBar.classList.add('show');
+                } else {
+                    selectBtn.classList.remove('active');
+                    selectionBar.classList.remove('show');
+                }
+
+                document.getElementById('selectionCount').textContent = this.selectedFiles.size + ' selected';
+            },
+
+            toggleFileSelection(path) {
+                if (this.selectedFiles.has(path)) {
+                    this.selectedFiles.delete(path);
+                } else {
+                    this.selectedFiles.add(path);
+                }
+                this.updateSelectionUI();
+
+                const item = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+                if (item) {
+                    item.classList.toggle('selected', this.selectedFiles.has(path));
+                    const checkbox = item.querySelector('input[type="checkbox"]');
+                    if (checkbox) checkbox.checked = this.selectedFiles.has(path);
+                }
+            },
+
+            clearSelection() {
+                this.selectedFiles.clear();
+                this.updateSelectionUI();
+                document.querySelectorAll('.file-item.selected').forEach(el => {
+                    el.classList.remove('selected');
+                    const checkbox = el.querySelector('input[type="checkbox"]');
+                    if (checkbox) checkbox.checked = false;
                 });
-                
-                if (response.ok) {
-                    loadFiles();
-                } else {
-                    const text = await response.text();
-                    alert('Delete failed: ' + text);
+            },
+
+            // ============================================
+            // File Operations
+            // ============================================
+            async createFolder() {
+                const folderName = prompt('Enter folder name:');
+                if (!folderName) return;
+
+                const sanitized = folderName.trim().replace(/[\/\\]/g, '');
+                if (!sanitized) {
+                    alert('Invalid folder name');
+                    return;
                 }
-            } catch (err) {
-                alert('Delete failed: ' + err.message);
-            }
-        }
 
-        async function uploadFiles() {
-            const files = document.getElementById('fileInput').files;
-            if (!files || files.length === 0) return;
-
-            const progressDiv = document.getElementById('uploadProgress');
-            const progressBar = document.getElementById('uploadProgressBar');
-            const fileNameSpan = document.getElementById('uploadFileName');
-            const fileNumSpan = document.getElementById('uploadFileNum');
-
-            progressDiv.classList.add('show');
-            
-            let successCount = 0;
-            let failCount = 0;
-
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                fileNameSpan.textContent = file.name;
-                fileNumSpan.textContent = `${i + 1} / ${files.length}`;
-                progressBar.style.width = ((i / files.length) * 100) + '%';
-
-                const formData = new FormData();
-                formData.append('file', file);
+                const path = this.currentPath === '/' ?
+                    '/' + sanitized :
+                    this.currentPath + '/' + sanitized;
 
                 try {
-                    const response = await fetch('/_api/files/upload', { 
-                        method: 'POST', 
-                        body: formData 
+                    const response = await fetch('/_api/files/mkdir', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ path: path })
                     });
-                    
+
                     if (response.ok) {
-                        successCount++;
+                        this.refresh();
                     } else {
-                        failCount++;
-                        console.error('Failed to upload:', file.name);
+                        const error = await response.json();
+                        alert('Failed to create folder: ' + (error.error || 'Unknown error'));
                     }
                 } catch (err) {
-                    failCount++;
-                    console.error('Error uploading:', file.name, err);
+                    alert('Failed to create folder: ' + err.message);
+                }
+            },
+
+            async renameFile(oldPath) {
+                const fileName = oldPath.split('/').pop();
+                const newName = prompt('Rename to:', fileName);
+                if (!newName || newName === fileName) return;
+
+                const sanitized = newName.trim().replace(/[\/\\]/g, '');
+                if (!sanitized) {
+                    alert('Invalid file name');
+                    return;
                 }
 
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
+                const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/')) || '/';
+                const newPath = parentPath === '/' ? '/' + sanitized : parentPath + '/' + sanitized;
 
-            progressBar.style.width = '100%';
-            setTimeout(() => {
-                progressDiv.classList.remove('show');
-                document.getElementById('fileInput').value = '';
-                loadFiles();
-                
+                try {
+                    // Use move API with same parent
+                    const response = await fetch('/_api/files/move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            source: oldPath,
+                            destination: newPath
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.refresh();
+                    } else {
+                        const error = await response.json();
+                        alert('Failed to rename: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Failed to rename: ' + err.message);
+                }
+            },
+
+            async moveFile(sourcePath) {
+                const destPath = prompt('Move to (full path):', this.currentPath + '/');
+                if (!destPath || destPath === sourcePath) return;
+
+                try {
+                    const response = await fetch('/_api/files/move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            source: sourcePath,
+                            destination: destPath
+                        })
+                    });
+
+                    if (response.ok) {
+                        this.refresh();
+                    } else {
+                        const error = await response.json();
+                        alert('Failed to move: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Failed to move: ' + err.message);
+                }
+            },
+
+            async moveSelected() {
+                if (this.selectedFiles.size === 0) return;
+
+                const destPath = prompt('Move selected items to:', this.currentPath + '/');
+                if (!destPath) return;
+
+                let successCount = 0;
+                let failCount = 0;
+
+                for (const sourcePath of this.selectedFiles) {
+                    const fileName = sourcePath.split('/').pop();
+                    const newPath = destPath.endsWith('/') ?
+                        destPath + fileName :
+                        destPath + '/' + fileName;
+
+                    try {
+                        const response = await fetch('/_api/files/move', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                source: sourcePath,
+                                destination: newPath
+                            })
+                        });
+
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                        }
+                    } catch (err) {
+                        failCount++;
+                        console.error('Error moving:', sourcePath, err);
+                    }
+                }
+
+                this.clearSelection();
+                this.refresh();
+
                 if (failCount > 0) {
-                    alert(`Uploaded ${successCount} file(s). Failed: ${failCount}`);
+                    alert(`Moved ${successCount} item(s). Failed: ${failCount}`);
                 }
-            }, 500);
-        }
+            },
 
-        async function loadSystemInfo() {
-            try {
-                const wifi = await fetch('/_api/wifi/status').then(r => r.json());
-                document.getElementById('ipAddress').textContent = wifi.ip;
+            viewFile(path) {
+                window.open(path, '_blank');
+            },
 
-                const sys = await fetch('/_api/system/info').then(r => r.json());
-                document.getElementById('freeSpace').textContent = formatBytes(sys.free_heap);
-            } catch (err) {
-                console.error(err);
+            downloadFile(path) {
+                const a = document.createElement('a');
+                a.href = '/_api/files/download?path=' + encodeURIComponent(path);
+                a.download = path.split('/').pop();
+                a.click();
+            },
+
+            async deleteFile(path) {
+                if (!confirm('Delete ' + path + '?')) return;
+
+                try {
+                    const response = await fetch('/_api/files/delete?path=' + encodeURIComponent(path), {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        this.refresh();
+                    } else {
+                        const error = await response.json();
+                        alert('Delete failed: ' + (error.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('Delete failed: ' + err.message);
+                }
+            },
+
+            async deleteSelected() {
+                if (this.selectedFiles.size === 0) return;
+
+                if (!confirm(`Delete ${this.selectedFiles.size} item(s)?`)) return;
+
+                const paths = Array.from(this.selectedFiles);
+                let successCount = 0;
+                let failCount = 0;
+
+                for (const path of paths) {
+                    try {
+                        const response = await fetch('/_api/files/delete?path=' + encodeURIComponent(path), {
+                            method: 'DELETE'
+                        });
+
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                            console.error('Failed to delete:', path);
+                        }
+                    } catch (err) {
+                        failCount++;
+                        console.error('Error deleting:', path, err);
+                    }
+                }
+
+                this.clearSelection();
+                this.refresh();
+
+                if (failCount > 0) {
+                    alert(`Deleted ${successCount} item(s). Failed: ${failCount}`);
+                }
+            },
+
+            // ============================================
+            // Upload Operations
+            // ============================================
+            uploadToCurrentFolder(isFolder) {
+                this.uploadTargetPath = this.currentPath;
+                if (isFolder) {
+                    document.getElementById('folderInput').click();
+                } else {
+                    document.getElementById('fileInput').click();
+                }
+            },
+
+            uploadToFolder(folderPath) {
+                this.uploadTargetPath = folderPath;
+                const choice = confirm('Upload FILES (OK) or FOLDER (Cancel)?');
+                if (choice) {
+                    document.getElementById('fileInput').click();
+                } else {
+                    document.getElementById('folderInput').click();
+                }
+            },
+
+            async handleFileInputChange(inputElement) {
+                const files = inputElement.files;
+                if (!files || files.length === 0) return;
+
+                const filesList = Array.from(files).map(file => {
+                    if (file.webkitRelativePath) {
+                        file.fullPath = file.webkitRelativePath;
+                    }
+                    return file;
+                });
+
+                await this.uploadFilesList(filesList, this.uploadTargetPath);
+                inputElement.value = '';
+            },
+
+            async uploadFilesList(files, targetPath) {
+                const progressDiv = document.getElementById('uploadProgress');
+                const progressBar = document.getElementById('uploadProgressBar');
+                const fileNameSpan = document.getElementById('uploadFileName');
+                const fileNumSpan = document.getElementById('uploadFileNum');
+
+                progressDiv.classList.add('show');
+
+                let successCount = 0;
+                let failCount = 0;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const relativePath = file.fullPath || file.name;
+
+                    fileNameSpan.textContent = relativePath;
+                    fileNumSpan.textContent = `${i + 1} / ${files.length}`;
+                    progressBar.style.width = ((i / files.length) * 100) + '%';
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    // Build upload path
+                    let uploadPath;
+                    if (file.fullPath) {
+                        // Folder upload - preserve structure
+                        uploadPath = targetPath === '/' ?
+                            '/' + file.fullPath :
+                            targetPath + '/' + file.fullPath;
+                    } else {
+                        // Single file upload
+                        uploadPath = targetPath === '/' ?
+                            '/' + file.name :
+                            targetPath + '/' + file.name;
+                    }
+
+                    formData.append('path', uploadPath);
+
+                    try {
+                        const response = await fetch('/_api/files/upload', {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        if (response.ok) {
+                            successCount++;
+                        } else {
+                            failCount++;
+                            console.error('Failed to upload:', relativePath);
+                        }
+                    } catch (err) {
+                        failCount++;
+                        console.error('Error uploading:', relativePath, err);
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressDiv.classList.remove('show');
+                    this.refresh();
+
+                    if (failCount > 0) {
+                        alert(`Uploaded ${successCount} file(s). Failed: ${failCount}`);
+                    }
+                }, 500);
+            },
+
+            // ============================================
+            // System Info
+            // ============================================
+            async loadSystemInfo() {
+                try {
+                    const [wifi, sys, storage] = await Promise.all([
+                        fetch('/_api/wifi/status').then(r => r.json()),
+                        fetch('/_api/system/info').then(r => r.json()),
+                        fetch('/_api/storage/info').then(r => r.json())
+                    ]);
+
+                    document.getElementById('ipAddress').textContent = wifi.ip;
+                    document.getElementById('freeHeap').textContent = this.formatBytes(sys.free_heap);
+
+                    const usedMB = (storage.total - storage.free) / (1024 * 1024);
+                    const totalMB = storage.total / (1024 * 1024);
+                    document.getElementById('sdCardUsage').textContent =
+                        `${usedMB.toFixed(0)}MB / ${totalMB.toFixed(0)}MB`;
+                } catch (err) {
+                    console.error('Failed to load system info:', err);
+                }
+            },
+
+            // ============================================
+            // Utilities
+            // ============================================
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            },
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
             }
-        }
+        };
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
-
-        loadFiles();
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            FileManager.init();
+        });
     </script>
 </body>
 

@@ -177,6 +177,15 @@ void initWiFiConfig() {
   
   LOG_INFO("Creating default WiFi config file...");
   
+  // Ensure /os directory exists
+  if (!SD.exists(DIR_OS)) {
+    if (!SD.mkdir(DIR_OS)) {
+      LOG_ERROR("Failed to create %s directory", DIR_OS);
+      return;
+    }
+    LOG_INFO("Created %s directory", DIR_OS);
+  }
+  
   JsonDocument doc;
   JsonArray networks = doc["networks"].to<JsonArray>();
   

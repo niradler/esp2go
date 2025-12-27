@@ -60,6 +60,21 @@ bool deleteRecursive(const String& path) {
   return SD.rmdir(path);
 }
 
+// Helper to create directory path recursively
+void createDirectoryPath(const String& path) {
+  if (path.length() == 0 || path == "/") return;
+  if (SD.exists(path)) return;
+  
+  int lastSlash = path.lastIndexOf('/');
+  if (lastSlash > 0) {
+    String parentPath = path.substring(0, lastSlash);
+    createDirectoryPath(parentPath);
+  }
+  
+  SD.mkdir(path);
+  LOG_INFO("Created directory: %s", path.c_str());
+}
+
 void setupAPIEndpoints() {
   server.on("/_api/system/info", HTTP_GET, [](AsyncWebServerRequest *request) {
     JsonDocument doc;
@@ -69,6 +84,17 @@ void setupAPIEndpoints() {
     doc["free_heap"] = ESP.getFreeHeap();
     doc["flash_size"] = ESP.getFlashChipSize();
     doc["uptime"] = millis() / 1000;
+    
+    String response;
+    serializeJson(doc, response);
+    request->send(200, "application/json", response);
+  });
+  
+  server.on("/_api/storage/info", HTTP_GET, [](AsyncWebServerRequest *request) {
+    JsonDocument doc;
+    doc["total"] = SD.totalBytes();
+    doc["used"] = SD.usedBytes();
+    doc["free"] = SD.totalBytes() - SD.usedBytes();
     
     String response;
     serializeJson(doc, response);
@@ -353,6 +379,130 @@ void setupFileEndpoints() {
     request->send(200, "application/json", response);
   });
   
+  server.on("/_api/files/mkdir", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (index == 0) {
+      String body = "";
+      for (size_t i = 0; i < len; i++) {
+        body += (char)data[i];
+      }
+      
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, body);
+      
+      if (error) {
+        LOG_WARN("/_api/files/mkdir: Invalid JSON");
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+      }
+      
+      if (!doc.containsKey("path")) {
+        LOG_WARN("/_api/files/mkdir: Missing path parameter");
+        request->send(400, "application/json", "{\"error\":\"Missing path parameter\"}");
+        return;
+      }
+      
+      String path = doc["path"].as<String>();
+      LOG_INFO("/_api/files/mkdir: Creating %s", path.c_str());
+      
+      if (path.length() == 0 || path.indexOf("..") >= 0) {
+        LOG_WARN("/_api/files/mkdir: Invalid path: %s", path.c_str());
+        request->send(400, "application/json", "{\"error\":\"Invalid path\"}");
+        return;
+      }
+      
+      if (SD.exists(path)) {
+        LOG_WARN("/_api/files/mkdir: Path already exists: %s", path.c_str());
+        request->send(409, "application/json", "{\"error\":\"Path already exists\"}");
+        return;
+      }
+      
+      createDirectoryPath(path);
+      
+      if (SD.exists(path)) {
+        LOG_INFO("/_api/files/mkdir: Successfully created: %s", path.c_str());
+        request->send(200, "application/json", "{\"status\":\"created\"}");
+      } else {
+        LOG_ERROR("/_api/files/mkdir: Failed to create: %s", path.c_str());
+        request->send(500, "application/json", "{\"error\":\"Failed to create directory\"}");
+      }
+    }
+  });
+  
+  server.on("/_api/files/move", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (index == 0) {
+      String body = "";
+      for (size_t i = 0; i < len; i++) {
+        body += (char)data[i];
+      }
+      
+      JsonDocument doc;
+      DeserializationError error = deserializeJson(doc, body);
+      
+      if (error) {
+        LOG_WARN("/_api/files/move: Invalid JSON");
+        request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+        return;
+      }
+      
+      if (!doc.containsKey("source") || !doc.containsKey("destination")) {
+        LOG_WARN("/_api/files/move: Missing parameters");
+        request->send(400, "application/json", "{\"error\":\"Missing source or destination parameter\"}");
+        return;
+      }
+      
+      String source = doc["source"].as<String>();
+      String destination = doc["destination"].as<String>();
+      
+      LOG_INFO("/_api/files/move: %s -> %s", source.c_str(), destination.c_str());
+      
+      // Validation
+      if (source.length() == 0 || destination.length() == 0 || 
+          source.indexOf("..") >= 0 || destination.indexOf("..") >= 0) {
+        LOG_WARN("/_api/files/move: Invalid paths");
+        request->send(400, "application/json", "{\"error\":\"Invalid paths\"}");
+        return;
+      }
+      
+      if (source == "/" || source == "/index.html") {
+        LOG_WARN("/_api/files/move: Cannot move protected file: %s", source.c_str());
+        request->send(403, "application/json", "{\"error\":\"Cannot move protected file\"}");
+        return;
+      }
+      
+      if (!SD.exists(source)) {
+        LOG_WARN("/_api/files/move: Source not found: %s", source.c_str());
+        request->send(404, "application/json", "{\"error\":\"Source file not found\"}");
+        return;
+      }
+      
+      if (SD.exists(destination)) {
+        LOG_WARN("/_api/files/move: Destination already exists: %s", destination.c_str());
+        request->send(409, "application/json", "{\"error\":\"Destination already exists\"}");
+        return;
+      }
+      
+      // Ensure destination parent directory exists
+      int lastSlash = destination.lastIndexOf('/');
+      if (lastSlash > 0) {
+        String destDir = destination.substring(0, lastSlash);
+        if (!SD.exists(destDir)) {
+          createDirectoryPath(destDir);
+        }
+      }
+      
+      // Perform rename/move
+      if (SD.rename(source, destination)) {
+        LOG_INFO("/_api/files/move: Success");
+        request->send(200, "application/json", "{\"status\":\"moved\"}");
+      } else {
+        LOG_ERROR("/_api/files/move: Failed");
+        request->send(500, "application/json", "{\"error\":\"Move operation failed\"}");
+      }
+    }
+  });
+
   server.on("/_api/files/delete", HTTP_DELETE, [](AsyncWebServerRequest *request) {
     if (!request->hasParam("path")) {
       LOG_WARN("/_api/files/delete: Missing path parameter");
@@ -413,11 +563,26 @@ void setupFileEndpoints() {
         Serial.println("API UPLOAD STARTED");
         Serial.println("========================================");
         
-        String path = request->hasParam("path") ? request->getParam("path")->value() : "/";
-        uploadPath = path + "/" + filename;
+        // Check if a full path is provided (for folder uploads)
+        if (request->hasParam("path", true)) {
+          uploadPath = request->getParam("path", true)->value();
+        } else {
+          String path = request->hasParam("path") ? request->getParam("path")->value() : "/";
+          uploadPath = path + "/" + filename;
+        }
+        
         if (uploadPath.startsWith("//")) {
           uploadPath = uploadPath.substring(1);
         }
+        
+        // Ensure parent directories exist
+        int lastSlash = uploadPath.lastIndexOf('/');
+        if (lastSlash > 0) {
+          String dirPath = uploadPath.substring(0, lastSlash);
+          // Create directory structure if it doesn't exist
+          createDirectoryPath(dirPath);
+        }
+        
         totalUploaded = 0;
         
         if (uploadFile) {

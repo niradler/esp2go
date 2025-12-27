@@ -5,7 +5,8 @@ info:
     Complete REST API for ESP2GO - ESP32 Storage & Control System.
     
     ## Features
-    - File management (list, upload, download, delete)
+    - File management (list, upload, download, delete, create directories)
+    - Storage monitoring (SD card total/used/free space)
     - Hardware control (RGB LED, GPIO)
     - Sensor monitoring (microphone, button)
     - System information (WiFi, memory, uptime)
@@ -32,6 +33,8 @@ servers:
 tags:
   - name: System
     description: System information and status
+  - name: Storage
+    description: SD card storage information
   - name: WiFi
     description: WiFi connection management
   - name: Hardware
@@ -80,6 +83,33 @@ paths:
                     type: integer
                     description: Uptime in seconds
                     example: 3600
+
+  /_api/storage/info:
+    get:
+      tags:
+        - Storage
+      summary: Get SD card storage information
+      description: Returns SD card total, used, and free space in bytes
+      responses:
+        '200':
+          description: Storage information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total SD card size in bytes
+                    example: 32017047552
+                  used:
+                    type: integer
+                    description: Used space in bytes
+                    example: 4500000000
+                  free:
+                    type: integer
+                    description: Free space in bytes
+                    example: 27517047552
 
   /_api/wifi/status:
     get:
@@ -574,8 +604,9 @@ paths:
         - Files
       summary: Delete a file or directory
       description: |
-        Delete a file or empty directory from SD card.
+        Delete a file or directory (recursively) from SD card.
         Protected files (/, /index.html) cannot be deleted.
+        Directories are deleted recursively with all contents.
       parameters:
         - name: path
           in: query
@@ -586,7 +617,7 @@ paths:
           example: /old_file.txt
       responses:
         '200':
-          description: File deleted successfully
+          description: File/directory deleted successfully
           content:
             application/json:
               schema:
@@ -614,7 +645,58 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '500':
-          description: Delete failed (file in use or directory not empty)
+          description: Delete failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /_api/files/mkdir:
+    post:
+      tags:
+        - Files
+      summary: Create a directory
+      description: |
+        Create a new directory on SD card.
+        Parent directories are created automatically if they don't exist.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - path
+              properties:
+                path:
+                  type: string
+                  description: Directory path to create
+                  example: /new_folder
+      responses:
+        '200':
+          description: Directory created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: created
+        '400':
+          description: Invalid path
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Path already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Failed to create directory
           content:
             application/json:
               schema:
@@ -625,18 +707,27 @@ paths:
       tags:
         - Files
       summary: Upload a file
-      description: Upload a file to the SD card root directory
+      description: |
+        Upload a file to the SD card.
+        Can upload to root or specify a full path for nested directories.
+        Parent directories are created automatically if they don't exist.
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
+              required:
+                - file
               properties:
                 file:
                   type: string
                   format: binary
                   description: File to upload
+                path:
+                  type: string
+                  description: Optional full path including filename (for folder uploads)
+                  example: /folder/subfolder/file.txt
       responses:
         '200':
           description: File uploaded successfully
