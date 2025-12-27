@@ -378,52 +378,113 @@
             },
 
             setupContextMenu() {
-                // Hide context menu on click outside
-                document.addEventListener('click', () => {
-                    document.getElementById('contextMenu').classList.remove('show');
+                const menu = document.getElementById('contextMenu');
+
+                // Hide context menu on any click
+                document.addEventListener('click', (e) => {
+                    if (!menu.contains(e.target)) {
+                        menu.classList.remove('show');
+                    }
                 });
 
-                // Prevent default context menu
-                document.getElementById('fileList').addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
+                // Hide on ESC key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        menu.classList.remove('show');
+                    }
+                });
+
+                // Hide on scroll
+                document.getElementById('fileList').addEventListener('scroll', () => {
+                    menu.classList.remove('show');
                 });
             },
 
             setupDragDrop() {
                 const overlay = document.getElementById('dragOverlay');
                 let dragCounter = 0;
+                let dragTimeout = null;
 
+                // ESC key to close overlay
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && overlay.classList.contains('show')) {
+                        dragCounter = 0;
+                        overlay.classList.remove('show');
+                        this.clearDragStyles();
+                    }
+                });
+
+                // Global drag handlers (for files from outside)
                 document.addEventListener('dragenter', (e) => {
-                    e.preventDefault();
-                    dragCounter++;
-                    overlay.classList.add('show');
-                    document.getElementById('dragOverlayText').textContent =
-                        `Drop to upload to: ${this.currentPath}`;
+                    // Only show overlay for files from outside the page
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        dragCounter++;
+                        overlay.classList.add('show');
+                        document.getElementById('dragOverlayText').textContent =
+                            `Drop to upload to: ${this.currentPath}`;
+                    }
                 });
 
                 document.addEventListener('dragleave', (e) => {
-                    e.preventDefault();
-                    dragCounter--;
-                    if (dragCounter === 0) {
-                        overlay.classList.remove('show');
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        dragCounter--;
+                        if (dragCounter <= 0) {
+                            dragCounter = 0;
+                            overlay.classList.remove('show');
+                            this.clearDragStyles();
+                        }
                     }
                 });
 
                 document.addEventListener('dragover', (e) => {
-                    e.preventDefault();
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                    }
                 });
 
                 document.addEventListener('drop', async (e) => {
-                    e.preventDefault();
-                    dragCounter = 0;
-                    overlay.classList.remove('show');
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        e.stopPropagation();
 
-                    const items = e.dataTransfer.items;
-                    if (items) {
-                        await this.handleDroppedItems(items, this.dragOverFolder || this.currentPath);
+                        dragCounter = 0;
+                        overlay.classList.remove('show');
+                        this.clearDragStyles();
+
+                        const items = e.dataTransfer.items;
+                        if (items && items.length > 0) {
+                            // Find if dropped on a folder
+                            const dropTarget = e.target.closest('.file-item[data-isdir="true"]');
+                            const targetPath = dropTarget ?
+                                dropTarget.getAttribute('data-path') :
+                                this.currentPath;
+
+                            await this.handleDroppedItems(items, targetPath);
+                        }
                     }
-                    this.dragOverFolder = null;
                 });
+
+                // Timeout to auto-hide overlay if drag gets stuck
+                document.addEventListener('dragover', (e) => {
+                    clearTimeout(dragTimeout);
+                    dragTimeout = setTimeout(() => {
+                        if (dragCounter > 0) {
+                            dragCounter = 0;
+                            overlay.classList.remove('show');
+                            this.clearDragStyles();
+                        }
+                    }, 2000);
+                });
+            },
+
+            clearDragStyles() {
+                document.querySelectorAll('.file-item.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+                this.dragOverFolder = null;
             },
 
             async handleDroppedItems(items, targetPath) {
@@ -608,7 +669,7 @@
                         `FileManager.viewFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))`);
 
                 const uploadBtn = file.isDir && !this.selectionMode ?
-                    `<button class="btn btn-sm btn-outline-primary btn-action folder-upload-btn me-2" 
+                    `<button class="btn btn-sm btn-outline-primary btn-action folder-upload-btn" 
                             onclick="event.stopPropagation(); FileManager.uploadToFolder(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
                             title="Upload to this folder">
                         <i class="bi bi-upload"></i>
@@ -619,27 +680,27 @@
                          onclick="${clickHandler}"
                          oncontextmenu="event.preventDefault(); FileManager.showContextMenu(event, decodeURIComponent('${encodeURIComponent(fullPath)}'), ${file.isDir})">
                         ${checkboxHtml}
-                        <div class="flex-grow-1">
+                        <div class="flex-grow-1 d-flex align-items-center" style="min-width: 0;">
                             ${icon}
-                            <span class="fw-medium">${this.escapeHtml(file.name)}</span>
-                            ${!file.isDir ? '<small class="text-muted ms-2">(' + this.formatBytes(file.size) + ')</small>' : ''}
+                            <span class="fw-medium text-truncate">${this.escapeHtml(file.name)}</span>
+                            ${!file.isDir ? '<small class="text-muted ms-2 flex-shrink-0">(' + this.formatBytes(file.size) + ')</small>' : ''}
                         </div>
                         ${!this.selectionMode ? `
-                        <div class="btn-group btn-group-sm">
+                        <div class="file-actions">
                             ${uploadBtn}
-                            <button class="btn btn-outline-secondary btn-action" 
+                            <button class="btn btn-sm btn-outline-secondary btn-action" 
                                     onclick="event.stopPropagation(); FileManager.renameFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
                                     title="Rename">
                                 <i class="bi bi-pencil"></i>
                             </button>
                             ${!file.isDir ? `
-                                <button class="btn btn-outline-success btn-action" 
+                                <button class="btn btn-sm btn-outline-success btn-action" 
                                         onclick="event.stopPropagation(); FileManager.downloadFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
                                         title="Download">
                                     <i class="bi bi-download"></i>
                                 </button>
                             ` : ''}
-                            <button class="btn btn-outline-danger btn-action" 
+                            <button class="btn btn-sm btn-outline-danger btn-action" 
                                     onclick="event.stopPropagation(); FileManager.deleteFile(decodeURIComponent('${encodeURIComponent(fullPath)}'))" 
                                     title="Delete">
                                 <i class="bi bi-trash"></i>
@@ -662,16 +723,40 @@
                 this.contextMenuTarget = { path, isDir };
                 const menu = document.getElementById('contextMenu');
 
-                menu.style.left = event.pageX + 'px';
-                menu.style.top = event.pageY + 'px';
+                // Position menu
+                const x = event.pageX;
+                const y = event.pageY;
+                const menuWidth = 180;
+                const menuHeight = 160;
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+
+                // Adjust position if menu would go off screen
+                let left = x;
+                let top = y;
+
+                if (x + menuWidth > windowWidth) {
+                    left = windowWidth - menuWidth - 10;
+                }
+                if (y + menuHeight > windowHeight) {
+                    top = windowHeight - menuHeight - 10;
+                }
+
+                menu.style.left = left + 'px';
+                menu.style.top = top + 'px';
                 menu.classList.add('show');
 
-                // Hide download for directories
-                const items = menu.children;
-                items[1].style.display = isDir ? 'none' : 'block';
+                // Hide download option for directories
+                const items = menu.querySelectorAll('.context-menu-item');
+                if (items[1]) {
+                    items[1].style.display = isDir ? 'none' : 'block';
+                }
             },
 
             contextMenuAction(action) {
+                const menu = document.getElementById('contextMenu');
+                menu.classList.remove('show');
+
                 if (!this.contextMenuTarget) return;
 
                 switch (action) {
