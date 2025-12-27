@@ -4,8 +4,8 @@
 #include "config.h"
 #include "storage.h"
 #include "hardware.h"
-#include "wifi_config.h"
-#include "server.h"
+#include "wifi_manager.h"
+#include "api_server.h"
 #include "ota.h"
 
 void printSystemInfo() {

@@ -1,4 +1,4 @@
-#include "server.h"
+#include "api_server.h"
 #include "config.h"
 #include "hardware.h"
 #include "storage.h"
@@ -15,6 +15,49 @@ AsyncWebServer& getWebServer() {
 
 void stopWebServer() {
   server.end();
+}
+
+// Recursive directory deletion helper
+bool deleteRecursive(const String& path) {
+  File file = SD.open(path);
+  if (!file) {
+    return false;
+  }
+  
+  if (!file.isDirectory()) {
+    file.close();
+    return SD.remove(path);
+  }
+  
+  file.rewindDirectory();
+  File entry = file.openNextFile();
+  while (entry) {
+    String entryPath = String(path);
+    if (!entryPath.endsWith("/")) {
+      entryPath += "/";
+    }
+    entryPath += entry.name();
+    
+    if (entry.isDirectory()) {
+      entry.close();
+      if (!deleteRecursive(entryPath)) {
+        file.close();
+        return false;
+      }
+    } else {
+      entry.close();
+      if (!SD.remove(entryPath)) {
+        LOG_WARN("Failed to delete file: %s", entryPath.c_str());
+        file.close();
+        return false;
+      }
+    }
+    
+    entry = file.openNextFile();
+  }
+  
+  file.close();
+  return SD.rmdir(path);
 }
 
 void setupAPIEndpoints() {
@@ -338,26 +381,12 @@ void setupFileEndpoints() {
       return;
     }
     
-    File file = SD.open(path);
-    bool isDir = file.isDirectory();
-    file.close();
-    
-    if (isDir) {
-      if (SD.rmdir(path)) {
-        LOG_INFO("/_api/files/delete: Successfully deleted directory: %s", path.c_str());
-        request->send(200, "application/json", "{\"status\":\"deleted\"}");
-      } else {
-        LOG_ERROR("/_api/files/delete: Failed to delete directory (may not be empty): %s", path.c_str());
-        request->send(500, "application/json", "{\"error\":\"Directory not empty or in use\"}");
-      }
+    if (deleteRecursive(path)) {
+      LOG_INFO("/_api/files/delete: Successfully deleted: %s", path.c_str());
+      request->send(200, "application/json", "{\"status\":\"deleted\"}");
     } else {
-      if (SD.remove(path)) {
-        LOG_INFO("/_api/files/delete: Successfully deleted file: %s", path.c_str());
-        request->send(200, "application/json", "{\"status\":\"deleted\"}");
-      } else {
-        LOG_ERROR("/_api/files/delete: Failed to delete file: %s", path.c_str());
-        request->send(500, "application/json", "{\"error\":\"Delete failed - file may be in use\"}");
-      }
+      LOG_ERROR("/_api/files/delete: Failed to delete: %s", path.c_str());
+      request->send(500, "application/json", "{\"error\":\"Failed to delete\"}");
     }
   });
   
@@ -803,7 +832,5 @@ void setupWebServer() {
   
   server.begin();
   LOG_INFO("Web server started successfully");
-  
-  Serial.println("\n======> THIS IS FROM OTA VERSION 0 <======\n");
 }
 

@@ -14,7 +14,6 @@ void initOTA() {
   #else
   LOG_INFO("🔄 OTA Updates: ENABLED (no password)");
   #endif
-  LOG_INFO("📡 OTA Endpoint: http://%s/update", WiFi.localIP().toString().c_str());
 }
 
 void scheduleOTAUpdate(const String& firmwarePath) {

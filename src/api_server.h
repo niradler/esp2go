@@ -1,5 +1,5 @@
-#ifndef WEB_SERVER_H
-#define WEB_SERVER_H
+#ifndef API_SERVER_H
+#define API_SERVER_H
 
 #include <ESPAsyncWebServer.h>
 
