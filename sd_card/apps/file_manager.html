@@ -1121,10 +1121,26 @@
                         });
 
                         if (response.ok) {
-                            successCount++;
+                            const result = await response.json();
+                            
+                            if (result.success === false) {
+                                console.warn('Upload size mismatch:', relativePath, result);
+                                failCount++;
+                            } else {
+                                const expectedSize = file.size;
+                                const actualSize = result.file_size || result.bytes_written;
+                                
+                                if (actualSize !== expectedSize) {
+                                    console.warn(`Size mismatch for ${relativePath}: expected ${expectedSize}, got ${actualSize}`);
+                                    failCount++;
+                                } else {
+                                    successCount++;
+                                }
+                            }
                         } else {
                             failCount++;
-                            console.error('Failed to upload:', relativePath);
+                            const errorText = await response.text();
+                            console.error('Failed to upload:', relativePath, errorText);
                         }
                     } catch (err) {
                         failCount++;
@@ -1153,7 +1169,7 @@
                     const [wifi, sys, storage] = await Promise.all([
                         fetch('/_api/wifi/status').then(r => r.json()),
                         fetch('/_api/system/info').then(r => r.json()),
-                        fetch('/_api/storage/info').then(r => r.json())
+                        fetch('/_api/files/info').then(r => r.json())
                     ]);
 
                     document.getElementById('ipAddress').textContent = wifi.ip;

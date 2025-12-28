@@ -1,0 +1,9 @@
+{
+    "USB_HID_ENABLED": true,
+    "USB_HID_BOOT_TIMEOUT": 8000,
+    "DEFAULT_WIFI_SSID": "MyNetwork",
+    "DEFAULT_WIFI_PASSWORD": "mypassword",
+    "DEFAULT_AP_SSID": "MyESP2GO",
+    "DEFAULT_AP_PASSWORD": "87654321",
+    "MDNS_HOSTNAME": "esp2go"
+}

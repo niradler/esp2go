@@ -148,7 +148,7 @@
             document.getElementById('status').className = 'badge bg-success status-badge';
 
             // Test the API first
-            fetch('/_api/mic/level')
+            fetch('/_api/microphone/level')
                 .then(response => {
                     console.log('API test response status:', response.status);
                     return response.json();
@@ -169,7 +169,7 @@
                 });
 
             monitorInterval = setInterval(() => {
-                fetch('/_api/mic/level')
+                fetch('/_api/microphone/level')
                     .then(response => {
                         if (!response.ok) {
                             throw new Error('HTTP ' + response.status);
@@ -222,7 +222,7 @@
             const filename = document.getElementById('filename').value || 'recording.wav';
 
             try {
-                const response = await fetch('/_api/mic/record/start', {
+                const response = await fetch('/_api/microphone/record/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ filename })
@@ -247,7 +247,7 @@
 
         async function stopRecording() {
             try {
-                await fetch('/_api/mic/record/stop', { method: 'POST' });
+                await fetch('/_api/microphone/record/stop', { method: 'POST' });
 
                 document.getElementById('recordBtn').classList.remove('d-none');
                 document.getElementById('stopRecordBtn').classList.add('d-none');
@@ -267,7 +267,7 @@
         function startDurationTimer() {
             durationTimer = setInterval(async () => {
                 try {
-                    const response = await fetch('/_api/mic/record/status');
+                    const response = await fetch('/_api/microphone/record/status');
                     const data = await response.json();
 
                     if (data.recording && data.duration !== undefined) {

@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP2GO - USB HID Controller</title>
+    <link rel="icon" type="image/svg+xml"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⌨️</text></svg>">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 20px;
+        }
+
+        .status-badge {
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .key-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            font-size: 1.2rem;
+            margin: 5px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .key-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .special-key-btn {
+            width: auto;
+            min-width: 100px;
+            height: 60px;
+            font-size: 1rem;
+        }
+
+        .mouse-pad {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            cursor: move;
+            user-select: none;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .mouse-pad:active {
+            background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);
+        }
+
+        .mouse-btn {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            margin: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .media-btn {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            font-size: 2rem;
+            margin: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .text-area-custom {
+            border-radius: 10px;
+            border: 2px solid #667eea;
+            padding: 15px;
+            font-size: 1.1rem;
+        }
+
+        .text-area-custom:focus {
+            border-color: #764ba2;
+            box-shadow: 0 0 0 0.25rem rgba(118, 75, 162, 0.25);
+        }
+
+        .demo-section {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .typing-indicator {
+            display: none;
+            color: #667eea;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+        }
+
+        .typing-indicator.active {
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="main-container">
+        <!-- Safety Warning -->
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill"></i> Important: Firmware Flashing</h5>
+            <p class="mb-2">USB HID mode can interfere with firmware uploads. To flash new firmware:</p>
+            <ol class="mb-2">
+                <li><strong>Hold the BUTTON during boot</strong> for 3 seconds (LED will blink green/purple)</li>
+                <li>OR set <code>USB_HID_ENABLED = false</code> in <code>src/config.h</code></li>
+                <li>OR use GPIO0=LOW during power on (hardware upload mode)</li>
+            </ol>
+            <p class="mb-0"><small><strong>Safe Mode:</strong> When button is held, USB HID is disabled for that session
+                    only.</small></p>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Header -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="mb-0"><i class="bi bi-keyboard"></i> USB HID Controller</h1>
+                        <small class="text-muted">Control your computer from ESP2GO!</small>
+                    </div>
+                    <div>
+                        <span class="status-badge bg-secondary" id="statusBadge">
+                            <i class="bi bi-circle-fill"></i> Checking...
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- USB HID Enable/Disable Control -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-power"></i> USB HID Control</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> <strong>Important:</strong> Enabling USB HID will disable the
+                    Serial port for debugging.
+                    Hold the button during boot to skip USB HID initialization and restore Serial access.
+                </div>
+                <div class="d-flex gap-3 justify-content-center">
+                    <button class="btn btn-success btn-lg" id="enableBtn" onclick="HIDController.enableHID()">
+                        <i class="bi bi-toggle-on"></i> Enable USB HID
+                    </button>
+                    <button class="btn btn-danger btn-lg" id="disableBtn" onclick="HIDController.disableHID()">
+                        <i class="bi bi-toggle-off"></i> Disable USB HID
+                    </button>
+                </div>
+                <div class="mt-3 text-center">
+                    <small class="text-muted" id="hidStatus">Status: <span id="hidActive">Unknown</span></small>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Keyboard Section -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="bi bi-keyboard"></i> Keyboard</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Text Input -->
+                        <div class="demo-section">
+                            <h5>Type Text</h5>
+                            <textarea class="form-control text-area-custom mb-3" id="textInput" rows="3"
+                                placeholder="Enter text to send..."></textarea>
+                            <button class="btn btn-primary btn-lg w-100" onclick="HIDController.sendText()">
+                                <i class="bi bi-send"></i> Send Text
+                            </button>
+                            <span class="typing-indicator mt-2" id="typingIndicator">
+                                <i class="bi bi-three-dots"></i> Typing...
+                            </span>
+                        </div>
+
+                        <!-- Special Keys -->
+                        <div class="demo-section">
+                            <h5>Special Keys</h5>
+                            <div class="d-flex flex-wrap justify-content-center">
+                                <button class="btn btn-secondary key-btn" onclick="HIDController.sendKey(0x28, 0)"
+                                    title="Enter">⏎</button>
+                                <button class="btn btn-secondary key-btn" onclick="HIDController.sendKey(0x2A, 0)"
+                                    title="Backspace">⌫</button>
+                                <button class="btn btn-secondary key-btn" onclick="HIDController.sendKey(0x2B, 0)"
+                                    title="Tab">⇥</button>
+                                <button class="btn btn-secondary key-btn" onclick="HIDController.sendKey(0x29, 0)"
+                                    title="Esc">Esc</button>
+                            </div>
+                            <div class="d-flex flex-wrap justify-content-center mt-2">
+                                <button class="btn btn-info key-btn" onclick="HIDController.sendKey(0x52, 0)"
+                                    title="Up">↑</button>
+                                <button class="btn btn-info key-btn" onclick="HIDController.sendKey(0x51, 0)"
+                                    title="Down">↓</button>
+                                <button class="btn btn-info key-btn" onclick="HIDController.sendKey(0x50, 0)"
+                                    title="Left">←</button>
+                                <button class="btn btn-info key-btn" onclick="HIDController.sendKey(0x4F, 0)"
+                                    title="Right">→</button>
+                            </div>
+                        </div>
+
+                        <!-- Shortcuts -->
+                        <div class="demo-section">
+                            <h5>Shortcuts</h5>
+                            <div class="row">
+                                <div class="col-6 mb-2">
+                                    <button class="btn btn-warning w-100" onclick="HIDController.sendKey(0x06, 0x01)">
+                                        <i class="bi bi-files"></i> Ctrl+C
+                                    </button>
+                                </div>
+                                <div class="col-6 mb-2">
+                                    <button class="btn btn-warning w-100" onclick="HIDController.sendKey(0x19, 0x01)">
+                                        <i class="bi bi-clipboard"></i> Ctrl+V
+                                    </button>
+                                </div>
+                                <div class="col-6 mb-2">
+                                    <button class="btn btn-warning w-100" onclick="HIDController.sendKey(0x04, 0x01)">
+                                        <i class="bi bi-check-all"></i> Ctrl+A
+                                    </button>
+                                </div>
+                                <div class="col-6 mb-2">
+                                    <button class="btn btn-warning w-100" onclick="HIDController.sendKey(0x1D, 0x01)">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Ctrl+Z
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mouse Section -->
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="bi bi-mouse"></i> Mouse</h4>
+                    </div>
+                    <div class="card-body">
+                        <!-- Mouse Pad -->
+                        <div class="demo-section text-center">
+                            <h5>Move Mouse</h5>
+                            <div class="mouse-pad mx-auto" id="mousePad">
+                                Drag to Move
+                            </div>
+                            <div class="mt-3">
+                                <span class="badge bg-secondary">Sensitivity: <span
+                                        id="sensitivityValue">10</span>x</span>
+                                <input type="range" class="form-range" id="sensitivity" min="1" max="20" value="10"
+                                    oninput="document.getElementById('sensitivityValue').textContent = this.value">
+                            </div>
+                        </div>
+
+                        <!-- Mouse Buttons -->
+                        <div class="demo-section text-center">
+                            <h5>Click</h5>
+                            <div class="d-flex justify-content-center">
+                                <button class="btn btn-primary mouse-btn" onclick="HIDController.mouseClick(1)">
+                                    <i class="bi bi-hand-index"></i><br>Left
+                                </button>
+                                <button class="btn btn-secondary mouse-btn" onclick="HIDController.mouseClick(4)">
+                                    <i class="bi bi-hand-index"></i><br>Middle
+                                </button>
+                                <button class="btn btn-success mouse-btn" onclick="HIDController.mouseClick(2)">
+                                    <i class="bi bi-hand-index"></i><br>Right
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Scroll -->
+                        <div class="demo-section text-center">
+                            <h5>Scroll</h5>
+                            <div class="d-flex justify-content-center">
+                                <button class="btn btn-info key-btn" onclick="HIDController.mouseScroll(5)">
+                                    <i class="bi bi-arrow-up-circle"></i>
+                                </button>
+                                <button class="btn btn-info key-btn" onclick="HIDController.mouseScroll(-5)">
+                                    <i class="bi bi-arrow-down-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Media Controls -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h4 class="mb-0"><i class="bi bi-music-note-beamed"></i> Media Controls</h4>
+                    </div>
+                    <div class="card-body text-center">
+                        <div class="d-flex justify-content-center flex-wrap">
+                            <button class="btn btn-danger media-btn" onclick="HIDController.sendMediaKey(0xB6)">
+                                <i class="bi bi-skip-start-fill"></i>
+                            </button>
+                            <button class="btn btn-success media-btn" onclick="HIDController.sendMediaKey(0xCD)">
+                                <i class="bi bi-play-fill"></i>
+                            </button>
+                            <button class="btn btn-danger media-btn" onclick="HIDController.sendMediaKey(0xB5)">
+                                <i class="bi bi-skip-end-fill"></i>
+                            </button>
+                        </div>
+                        <div class="d-flex justify-content-center flex-wrap mt-3">
+                            <button class="btn btn-warning key-btn" onclick="HIDController.sendMediaKey(0xE2)">
+                                <i class="bi bi-volume-mute"></i>
+                            </button>
+                            <button class="btn btn-primary key-btn" onclick="HIDController.sendMediaKey(0xEA)">
+                                <i class="bi bi-volume-down"></i>
+                            </button>
+                            <button class="btn btn-primary key-btn" onclick="HIDController.sendMediaKey(0xE9)">
+                                <i class="bi bi-volume-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fun Demos -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="bi bi-magic"></i> Fun Demos</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <button class="btn btn-primary btn-lg w-100" onclick="HIDController.drawCircle()">
+                            <i class="bi bi-circle"></i> Draw Circle
+                        </button>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <button class="btn btn-success btn-lg w-100" onclick="HIDController.typeHello()">
+                            <i class="bi bi-chat-heart"></i> Type "Hello World!"
+                        </button>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <button class="btn btn-warning btn-lg w-100" onclick="HIDController.shakeWindow()">
+                            <i class="bi bi-arrow-left-right"></i> Shake Window
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const HIDController = {
+            async checkStatus() {
+                try {
+                    const response = await fetch('/_api/hid/status');
+                    const data = await response.json();
+
+                    const badge = document.getElementById('statusBadge');
+                    const hidActive = document.getElementById('hidActive');
+                    const enableBtn = document.getElementById('enableBtn');
+                    const disableBtn = document.getElementById('disableBtn');
+
+                    if (data.active) {
+                        badge.className = 'status-badge bg-success';
+                        badge.innerHTML = '<i class="bi bi-circle-fill"></i> HID Active';
+                        hidActive.textContent = 'Enabled ✓';
+                        hidActive.className = 'text-success fw-bold';
+                        enableBtn.disabled = true;
+                        disableBtn.disabled = false;
+                    } else {
+                        badge.className = 'status-badge bg-warning';
+                        badge.innerHTML = '<i class="bi bi-circle-fill"></i> HID Disabled';
+                        hidActive.textContent = 'Disabled';
+                        hidActive.className = 'text-warning fw-bold';
+                        enableBtn.disabled = false;
+                        disableBtn.disabled = true;
+                    }
+
+                    if (data.serial_port_available === false) {
+                        console.warn('Serial port unavailable while USB HID is active');
+                    }
+                } catch (err) {
+                    console.error('Status check failed:', err);
+                    const badge = document.getElementById('statusBadge');
+                    badge.className = 'status-badge bg-danger';
+                    badge.innerHTML = '<i class="bi bi-circle-fill"></i> Error';
+                }
+            },
+
+            async enableHID() {
+                if (!confirm('⚠️ Enabling USB HID will disable Serial port!\n\nTo flash firmware later:\n• Hold button during boot for safe mode\n\nContinue?')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/_api/hid/enable', { method: 'POST' });
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        alert('✅ USB HID Enabled!\n\n' + (data.warning || 'Serial port is now unavailable.'));
+                        await this.checkStatus();
+                    } else {
+                        alert('❌ Failed to enable USB HID: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            },
+
+            async disableHID() {
+                if (!confirm('Disable USB HID?\n\nNote: You need to restart the device to restore Serial port functionality.')) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/_api/hid/disable', { method: 'POST' });
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        alert('✅ USB HID Disabled!\n\n' + (data.note || 'Restart device to restore Serial port.'));
+                        await this.checkStatus();
+                    } else {
+                        alert('❌ Failed to disable USB HID: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (err) {
+                    alert('❌ Error: ' + err.message);
+                }
+            },
+
+            async sendText() {
+                const text = document.getElementById('textInput').value;
+                if (!text) return;
+
+                const indicator = document.getElementById('typingIndicator');
+                indicator.classList.add('active');
+
+                try {
+                    const response = await fetch('/_api/hid/keyboard/text', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: text })
+                    });
+
+                    if (response.ok) {
+                        document.getElementById('textInput').value = '';
+                    }
+                } catch (err) {
+                    console.error('Send text failed:', err);
+                    alert('Failed to send text: ' + err.message);
+                } finally {
+                    indicator.classList.remove('active');
+                }
+            },
+
+            async sendKey(key, modifiers = 0) {
+                try {
+                    await fetch('/_api/hid/keyboard/key', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: key, modifiers: modifiers })
+                    });
+                } catch (err) {
+                    console.error('Send key failed:', err);
+                }
+            },
+
+            async mouseMove(x, y) {
+                try {
+                    await fetch('/_api/hid/mouse/move', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ x: x, y: y })
+                    });
+                } catch (err) {
+                    console.error('Mouse move failed:', err);
+                }
+            },
+
+            async mouseClick(button) {
+                try {
+                    await fetch('/_api/hid/mouse/click', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ button: button })
+                    });
+                } catch (err) {
+                    console.error('Mouse click failed:', err);
+                }
+            },
+
+            async mouseScroll(wheel) {
+                try {
+                    await fetch('/_api/hid/mouse/scroll', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ wheel: wheel })
+                    });
+                } catch (err) {
+                    console.error('Mouse scroll failed:', err);
+                }
+            },
+
+            async sendMediaKey(key) {
+                try {
+                    await fetch('/_api/hid/media', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: key })
+                    });
+                } catch (err) {
+                    console.error('Media key failed:', err);
+                }
+            },
+
+            // Fun Demos
+            async drawCircle() {
+                const steps = 36;
+                const radius = 50;
+
+                for (let i = 0; i < steps; i++) {
+                    const angle = (i / steps) * 2 * Math.PI;
+                    const x = Math.round(Math.cos(angle) * radius / 10);
+                    const y = Math.round(Math.sin(angle) * radius / 10);
+                    await this.mouseMove(x, y);
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            },
+
+            async typeHello() {
+                const messages = [
+                    "Hello from ESP2GO! 👋",
+                    "This is a USB HID device!",
+                    "Pretty cool, right? 😎"
+                ];
+
+                for (const msg of messages) {
+                    const response = await fetch('/_api/hid/keyboard/text', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: msg + '\n' })
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            },
+
+            async shakeWindow() {
+                for (let i = 0; i < 10; i++) {
+                    await this.mouseMove(i % 2 === 0 ? 20 : -20, 0);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        };
+
+        // Initialize on DOM ready
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // Mouse pad drag handling
+                const mousePad = document.getElementById('mousePad');
+                if (!mousePad) {
+                    console.error('mousePad element not found');
+                    return;
+                }
+
+                let isDragging = false;
+                let lastX = 0, lastY = 0;
+
+                mousePad.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', async (e) => {
+                    if (!isDragging) return;
+
+                    const sensitivity = parseInt(document.getElementById('sensitivity').value);
+                    const deltaX = Math.round((e.clientX - lastX) / sensitivity);
+                    const deltaY = Math.round((e.clientY - lastY) / sensitivity);
+
+                    if (deltaX !== 0 || deltaY !== 0) {
+                        await HIDController.mouseMove(deltaX, deltaY);
+                        lastX = e.clientX;
+                        lastY = e.clientY;
+                    }
+                });
+
+                document.addEventListener('mouseup', () => {
+                    isDragging = false;
+                });
+
+                // Touch support for mobile
+                mousePad.addEventListener('touchstart', (e) => {
+                    isDragging = true;
+                    lastX = e.touches[0].clientX;
+                    lastY = e.touches[0].clientY;
+                    e.preventDefault();
+                });
+
+                document.addEventListener('touchmove', async (e) => {
+                    if (!isDragging) return;
+
+                    const sensitivity = parseInt(document.getElementById('sensitivity').value);
+                    const deltaX = Math.round((e.touches[0].clientX - lastX) / sensitivity);
+                    const deltaY = Math.round((e.touches[0].clientY - lastY) / sensitivity);
+
+                    if (deltaX !== 0 || deltaY !== 0) {
+                        await HIDController.mouseMove(deltaX, deltaY);
+                        lastX = e.touches[0].clientX;
+                        lastY = e.touches[0].clientY;
+                    }
+                });
+
+                document.addEventListener('touchend', () => {
+                    isDragging = false;
+                });
+
+                // Enter key support for text input
+                const textInput = document.getElementById('textInput');
+                if (textInput) {
+                    textInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                            HIDController.sendText();
+                        }
+                    });
+                }
+
+                // Check status on load and periodically
+                HIDController.checkStatus();
+                setInterval(() => HIDController.checkStatus(), 5000);
+            } catch (err) {
+                console.error('Failed to initialize HID Controller:', err);
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

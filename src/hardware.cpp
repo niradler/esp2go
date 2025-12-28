@@ -90,12 +90,6 @@ int readMicrophoneLevel() {
       // Normalize to 0-100 range
       // int16_t range is -32768 to 32767, adjust scaling
       currentAudioLevel = min(100, max(0, (rms * 100) / 10000));
-      
-      // Log every 10th reading for debugging
-      static int readCount = 0;
-      if (++readCount % 10 == 0) {
-        Serial.printf("🎤 MIC: RMS=%d, Level=%d\n", rms, currentAudioLevel);
-      }
     }
   }
   
@@ -203,12 +197,12 @@ void processRecording() {
 }
 
 void setupButton() {
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  Serial.println("ℹ️  INFO: Button initialized on GPIO 41");
+  Serial.println("ℹ️  INFO: Button initialized (using M5Unified API)");
 }
 
 bool readButton() {
-  return digitalRead(BUTTON_PIN) == LOW; // Active LOW
+  M5.update();
+  return M5.BtnA.isPressed();
 }
 
 void setupLED() {
