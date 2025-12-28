@@ -805,18 +805,38 @@
                     selectionBar.classList.remove('show');
                 }
 
-                document.getElementById('selectionCount').textContent = this.selectedFiles.size + ' selected';
+                const count = this.selectedFiles.size;
+                const selectedFolders = Array.from(this.selectedFiles).filter(path => {
+                    const item = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+                    return item && item.getAttribute('data-isdir') === 'true';
+                });
+                let countText = count + ' selected';
+                if (selectedFolders.length > 0) {
+                    countText += ` (${selectedFolders.length} folder${selectedFolders.length > 1 ? 's' : ''})`;
+                    if (selectedFolders.length === 1) {
+                        countText += ` - Uploads will go to: ${selectedFolders[0]}`;
+                    }
+                }
+                document.getElementById('selectionCount').textContent = countText;
             },
 
             toggleFileSelection(path) {
+                const item = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+                const isDir = item ? item.getAttribute('data-isdir') === 'true' : false;
+                
                 if (this.selectedFiles.has(path)) {
                     this.selectedFiles.delete(path);
+                    if (isDir && this.uploadTargetPath === path) {
+                        this.uploadTargetPath = this.currentPath;
+                    }
                 } else {
                     this.selectedFiles.add(path);
+                    if (isDir) {
+                        this.uploadTargetPath = path;
+                    }
                 }
                 this.updateSelectionUI();
 
-                const item = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
                 if (item) {
                     item.classList.toggle('selected', this.selectedFiles.has(path));
                     const checkbox = item.querySelector('input[type="checkbox"]');
@@ -1072,7 +1092,9 @@
                     return file;
                 });
 
-                await this.uploadFilesList(filesList, this.uploadTargetPath);
+                const targetPath = this.uploadTargetPath || this.currentPath;
+                console.log('Uploading to:', targetPath, 'Current path:', this.currentPath);
+                await this.uploadFilesList(filesList, targetPath);
                 inputElement.value = '';
             },
 
@@ -1098,20 +1120,30 @@
                     const formData = new FormData();
                     formData.append('file', file);
 
-                    // Build upload path
-                    let uploadPath;
+                    // Build upload path - send directory path only, server will append filename
+                    let uploadPath = targetPath || '/';
+                    
                     if (file.fullPath) {
                         // Folder upload - preserve structure
-                        uploadPath = targetPath === '/' ?
-                            '/' + file.fullPath :
-                            targetPath + '/' + file.fullPath;
-                    } else {
-                        // Single file upload
-                        uploadPath = targetPath === '/' ?
-                            '/' + file.name :
-                            targetPath + '/' + file.name;
+                        // Extract directory from fullPath
+                        const fullPathParts = file.fullPath.split('/');
+                        fullPathParts.pop(); // Remove filename
+                        const relativeDir = fullPathParts.join('/');
+                        
+                        // Combine targetPath with relative directory structure
+                        if (uploadPath === '/') {
+                            uploadPath = relativeDir ? '/' + relativeDir : '/';
+                        } else {
+                            uploadPath = relativeDir ? uploadPath + '/' + relativeDir : uploadPath;
+                        }
+                    }
+                    
+                    // Ensure path ends with / for directory
+                    if (!uploadPath.endsWith('/')) {
+                        uploadPath += '/';
                     }
 
+                    console.log('Upload path for', file.name, ':', uploadPath);
                     formData.append('path', uploadPath);
 
                     try {
