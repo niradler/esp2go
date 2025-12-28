@@ -84,33 +84,6 @@ paths:
                     description: Uptime in seconds
                     example: 3600
 
-  /_api/storage/info:
-    get:
-      tags:
-        - Storage
-      summary: Get SD card storage information
-      description: Returns SD card total, used, and free space in bytes
-      responses:
-        '200':
-          description: Storage information
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  total:
-                    type: integer
-                    description: Total SD card size in bytes
-                    example: 32017047552
-                  used:
-                    type: integer
-                    description: Used space in bytes
-                    example: 4500000000
-                  free:
-                    type: integer
-                    description: Free space in bytes
-                    example: 27517047552
-
   /_api/wifi/status:
     get:
       tags:
@@ -526,42 +499,40 @@ paths:
     get:
       tags:
         - Files
-      summary: Get file information
-      description: Get details about a specific file
-      parameters:
-        - name: path
-          in: query
-          description: File path
-          required: true
-          schema:
-            type: string
-          example: /index.html
+      summary: Get SD card storage information
+      description: Returns SD card total, used, and free space in bytes and MB
       responses:
         '200':
-          description: File information
+          description: Storage information
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  name:
-                    type: string
-                    example: index.html
-                  size:
+                  total:
                     type: integer
-                    example: 2048
-                  isDir:
-                    type: boolean
-                    example: false
-                  path:
-                    type: string
-                    example: /index.html
-        '404':
-          description: File not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                    description: Total SD card size in bytes
+                    example: 32017047552
+                  used:
+                    type: integer
+                    description: Used space in bytes
+                    example: 4500000000
+                  free:
+                    type: integer
+                    description: Free space in bytes
+                    example: 27517047552
+                  total_mb:
+                    type: integer
+                    description: Total SD card size in MB
+                    example: 30528
+                  used_mb:
+                    type: integer
+                    description: Used space in MB
+                    example: 4291
+                  free_mb:
+                    type: integer
+                    description: Free space in MB
+                    example: 26237
 
   /_api/files/download:
     get:

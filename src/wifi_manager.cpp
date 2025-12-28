@@ -6,8 +6,8 @@
 
 WiFiNetwork savedNetworks[MAX_WIFI_NETWORKS];
 int networkCount = 0;
-String saved_ap_ssid = DEFAULT_AP_SSID;
-String saved_ap_password = DEFAULT_AP_PASSWORD;
+String saved_ap_ssid;
+String saved_ap_password;
 
 bool loadWiFiConfig() {
   if (!SD.exists(WIFI_CONFIG_FILE)) {
@@ -165,6 +165,9 @@ void scanAndSelectWiFi() {
 }
 
 void initWiFiConfig() {
+  saved_ap_ssid = Config.getDefaultApSsid();
+  saved_ap_password = Config.getDefaultApPassword();
+  
   if (SD.cardType() == CARD_NONE) {
     LOG_WARN("Cannot init WiFi config - SD card not available");
     return;
@@ -177,7 +180,6 @@ void initWiFiConfig() {
   
   LOG_INFO("Creating default WiFi config file...");
   
-  // Ensure /os directory exists
   if (!SD.exists(DIR_OS)) {
     if (!SD.mkdir(DIR_OS)) {
       LOG_ERROR("Failed to create %s directory", DIR_OS);
@@ -194,8 +196,8 @@ void initWiFiConfig() {
   net["password"] = "";
   net["priority"] = 1;
   
-  doc["ap_ssid"] = DEFAULT_AP_SSID;
-  doc["ap_password"] = DEFAULT_AP_PASSWORD;
+  doc["ap_ssid"] = Config.getDefaultApSsid();
+  doc["ap_password"] = Config.getDefaultApPassword();
   
   File file = SD.open(WIFI_CONFIG_FILE, FILE_WRITE);
   if (!file) {
@@ -269,8 +271,8 @@ void setupWiFi() {
           LOG_INFO("Channel: %d", WiFi.channel());
           LOG_INFO("MAC Address: %s", WiFi.macAddress().c_str());
           
-          if (MDNS.begin(MDNS_HOSTNAME)) {
-            LOG_INFO("mDNS responder started: http://%s.local", MDNS_HOSTNAME);
+          if (MDNS.begin(Config.getMdnsHostname().c_str())) {
+            LOG_INFO("mDNS responder started: http://%s.local", Config.getMdnsHostname().c_str());
           } else {
             LOG_WARN("Failed to start mDNS responder");
           }
@@ -282,32 +284,37 @@ void setupWiFi() {
   }
   
   if (!connected) {
-    LOG_INFO("Fallback: Trying default config from config.h...");
-    WiFi.begin(DEFAULT_WIFI_SSID, DEFAULT_WIFI_PASSWORD);
+    String defaultSsid = Config.getDefaultWifiSsid();
+    String defaultPassword = Config.getDefaultWifiPassword();
     
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-      delay(500);
-      Serial.print(".");
-      attempts++;
-      yield();
-    }
-    Serial.println();
-    
-    if (WiFi.status() == WL_CONNECTED) {
-      connected = true;
-      LOG_INFO("Connected to default network: %s", DEFAULT_WIFI_SSID);
-      LOG_INFO("IP Address: %s", WiFi.localIP().toString().c_str());
-      LOG_INFO("Gateway: %s", WiFi.gatewayIP().toString().c_str());
-      LOG_INFO("DNS: %s", WiFi.dnsIP().toString().c_str());
-      LOG_INFO("Signal Strength: %d dBm", WiFi.RSSI());
-      LOG_INFO("Channel: %d", WiFi.channel());
-      LOG_INFO("MAC Address: %s", WiFi.macAddress().c_str());
+    if (defaultSsid.length() > 0) {
+      LOG_INFO("Fallback: Trying default config from config...");
+      WiFi.begin(defaultSsid.c_str(), defaultPassword.c_str());
       
-      if (MDNS.begin(MDNS_HOSTNAME)) {
-        LOG_INFO("mDNS responder started: http://%s.local", MDNS_HOSTNAME);
-      } else {
-        LOG_WARN("Failed to start mDNS responder");
+      int attempts = 0;
+      while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+        yield();
+      }
+      Serial.println();
+      
+      if (WiFi.status() == WL_CONNECTED) {
+        connected = true;
+        LOG_INFO("Connected to default network: %s", defaultSsid.c_str());
+        LOG_INFO("IP Address: %s", WiFi.localIP().toString().c_str());
+        LOG_INFO("Gateway: %s", WiFi.gatewayIP().toString().c_str());
+        LOG_INFO("DNS: %s", WiFi.dnsIP().toString().c_str());
+        LOG_INFO("Signal Strength: %d dBm", WiFi.RSSI());
+        LOG_INFO("Channel: %d", WiFi.channel());
+        LOG_INFO("MAC Address: %s", WiFi.macAddress().c_str());
+        
+        if (MDNS.begin(Config.getMdnsHostname().c_str())) {
+          LOG_INFO("mDNS responder started: http://%s.local", Config.getMdnsHostname().c_str());
+        } else {
+          LOG_WARN("Failed to start mDNS responder");
+        }
       }
     }
   }
